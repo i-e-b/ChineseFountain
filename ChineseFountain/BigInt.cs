@@ -9,6 +9,7 @@ namespace ChineseFountain;
 /// </summary>
 public class Big
 {
+    public static int MaxSize { get; private set; } = 0;
     private readonly mpz_t _val;
     
     public Big()
@@ -23,7 +24,16 @@ public class Big
         gmp_lib.mpz_init_set_si(_val, v);
     }
 
-    public Big(mpz_t v) { _val = v; }
+    public Big(mpz_t v) {
+        _val = v;
+        CheckSize();
+    }
+
+    private void CheckSize()
+    {
+        var size = (int)gmp_lib.mpz_sizeinbase(_val, 2);
+        if (size > MaxSize) MaxSize = size;
+    }
 
     ~Big()
     {
@@ -41,6 +51,7 @@ public class Big
         var x = new Big(i);
         var r = new Big();
         gmp_lib.mpz_sub(r, _val, x);
+        r.CheckSize();
         return r;
     }
 
@@ -48,6 +59,7 @@ public class Big
     {
         var r = new Big();
         gmp_lib.mpz_invert(r, _val, b);
+        r.CheckSize();
         return r;
     }
 
@@ -55,6 +67,7 @@ public class Big
     {
         var r = new Big();
         gmp_lib.mpz_gcd(r, _val, cop);
+        r.CheckSize();
         return r;
     }
     
@@ -63,6 +76,7 @@ public class Big
     {
         var r = new Big();
         gmp_lib.mpz_mul(r, _val, y);
+        r.CheckSize();
         return r;
     }
 
@@ -70,6 +84,7 @@ public class Big
     {
         var r = new Big();
         gmp_lib.mpz_mod(r, _val, d);
+        r.CheckSize();
         return r;
     }
 
@@ -77,7 +92,22 @@ public class Big
     {
         var r = new Big();
         gmp_lib.mpz_add(r, _val, b);
+        r.CheckSize();
         return r;
+    }
+
+    public static Big pow(uint bse, uint exp)
+    {
+        var r = new Big();
+        gmp_lib.mpz_ui_pow_ui(r, bse, exp);
+        r.CheckSize();
+        return r;
+        
+    }
+
+    public bool gt(Big t1)
+    {
+        return gmp_lib.mpz_cmp(_val, t1) > 0;
     }
 
     public static Big FromBuffer(byte[] hunk)

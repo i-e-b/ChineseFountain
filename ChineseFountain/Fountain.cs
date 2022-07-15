@@ -3,7 +3,7 @@
 /// <summary>
 /// Generates packets from data
 /// </summary>
-public class Fountain
+public class Fountain: ChineseBase
 {
     private int bundle_size;
     private int bundle_shorts;
@@ -16,9 +16,7 @@ public class Fountain
     private int num_hunks;
     private Big[] mpz_hunks;
 
-    private const int SIZE_OF_SHORT = 2;
-    
-    /// <summary>
+    // <summary>
     /// Create a new 'fountain' source for the given data to be transmitted
     /// </summary>
     /// <param name="data">Complete data to be transmitted</param>
@@ -59,8 +57,8 @@ public class Fountain
     /// When enough are gathered, the receiver should be able to
     /// correctly reconstruct the original data.
     /// </summary>
-    /// <param name="bundleNum"></param>
-    public byte[] ReadBundle(int bundleNum) {
+    /// <param name="bundleNum">Count of the bundle. This should start at zero and increment.</param>
+    public byte[] Generate(int bundleNum) {
         var buffer = new byte[bundle_size];
         for (var i = 0; i < bundle_shorts; i++) {
             var mpz_hunk = mpz_hunks[i];
@@ -85,12 +83,4 @@ public class Fountain
         return buffer;
     }
     
-    
-    internal static int div_round_up(int num, int divisor) {
-        if (num < 0) throw new Exception("num < 0");
-        if (divisor < 1) throw new Exception("divisor < 1");
-        return 0 | ((num - 1 + divisor) / divisor);
-    }
-
-    private void assert(bool p0) { if (!p0) throw new Exception("assertion failed"); }
 }

@@ -59,8 +59,8 @@ public static class CoPrimes
         }
 
         var num_cops = subset_cops.Count;
-        var coeffs = new List<Big>();
-        var pre_mult_coeffs = new List<Big>();
+        var coeffs = new Big[num_cops];
+        var pre_mult_coeffs = new Big[num_cops];
 
         Big multiply_base(Big a, Big b) {
             var ret = a.mul(b).mod(_base); // a*b % _base
@@ -115,10 +115,10 @@ public static class CoPrimes
 
 public class BaseAndCoefficients
 {
-    public List<Big> Coeffs { get; }
+    public Big[] Coeffs { get; }
     public Big Base { get; }
 
-    public BaseAndCoefficients(List<Big> coeffs, Big @base)
+    public BaseAndCoefficients(Big[] coeffs, Big @base)
     {
         Coeffs = coeffs;
         Base = @base;

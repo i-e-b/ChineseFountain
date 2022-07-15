@@ -143,4 +143,6 @@ public class Big
         gmp_lib.free(data);
         return result;
     }
+
+    public static void ResetSize() { MaxSize = 0; }
 }

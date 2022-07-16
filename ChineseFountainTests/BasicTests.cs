@@ -6,6 +6,12 @@ namespace ChineseFountainTests;
 [TestFixture]
 public class BasicTests
 {
+    // TODO: out of order; wrong sequence number; corrupted.
+    // Will need to wrap the algo in an outer packet with x-sum and position?
+    
+    // Also, check that some patterns work -- like all 1s or all 0s.
+    
+    
     [Test]
     public void first_run()
     {

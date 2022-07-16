@@ -8,39 +8,38 @@
 public class Bucket: ChineseBase
 {
     
-    private readonly int length;
-    private readonly int bundle_size;
-    private readonly int bundle_shorts;
-    private readonly int padded_length;
-    private readonly int slice_size;
-    private readonly int min_bundles;
-    private readonly int hunk_size;
-    private readonly int num_hunks;
-    private readonly ByteMap bundles;
+    private readonly int _length;
+    private readonly int _bundleSize;
+    private readonly int _paddedLength;
+    private readonly int _sliceSize;
+    private readonly int _minBundles;
+    private readonly int _hunkSize;
+    private readonly int _numHunks;
+    private readonly ByteMap _bundles;
 
-    public Bucket(int length, int bundle_size) {
-        this.length = length;
-        this.bundle_size = bundle_size;
-        bundle_shorts = this.bundle_size / SIZE_OF_SHORT;
-        assert(bundle_shorts * SIZE_OF_SHORT == bundle_size); // throw if odd bundle_size
-        padded_length = div_round_up(this.length, this.bundle_size) * this.bundle_size;
-        slice_size = SIZE_OF_SHORT;
-        min_bundles = padded_length / this.bundle_size;
-        hunk_size = min_bundles * slice_size;
-        num_hunks = 0 | (padded_length / hunk_size);
-        assert(num_hunks == padded_length / hunk_size);
+    public Bucket(int length, int bundleSize) {
+        _length = length;
+        _bundleSize = bundleSize;
+        var bundleShorts = _bundleSize / SizeOfShort;
+        Assert(bundleShorts * SizeOfShort == bundleSize); // throw if odd bundle_size
+        _paddedLength = div_round_up(_length, _bundleSize) * _bundleSize;
+        _sliceSize = SizeOfShort;
+        _minBundles = _paddedLength / _bundleSize;
+        _hunkSize = _minBundles * _sliceSize;
+        _numHunks = 0 | (_paddedLength / _hunkSize);
+        Assert(_numHunks == _paddedLength / _hunkSize);
 
-        bundles = new ByteMap(); // TODO: IEB: container object!
+        _bundles = new ByteMap();
     }
     
     /// <summary>
     /// Feed more data into the bucket
     /// </summary>
-    /// <param name="bundle_num">the bundle index</param>
-    /// <param name="bundle_data">data we received</param>
-    public void Push(int bundle_num, byte[] bundle_data) {
-        assert(bundle_data.Length == bundle_size);
-        bundles[bundle_num] = bundle_data;
+    /// <param name="bundleNum">the bundle index</param>
+    /// <param name="bundleData">data we received</param>
+    public void Push(int bundleNum, byte[] bundleData) {
+        Assert(bundleData.Length == _bundleSize);
+        _bundles[bundleNum] = bundleData;
     }
     
     /// <summary>
@@ -49,18 +48,11 @@ public class Bucket: ChineseBase
     public bool IsComplete() {
         // do the cops multiply to more than the min_bundles value
         var prod = new Big(1);
-        foreach (var bundle_num in bundles.Keys) {
-            //console.log('prod', prod);
-            //console.log('bundle_num', bundle_num);
-            prod = prod.mul(CoPrimes.coprime16(bundle_num));
+        foreach (var bundleNum in _bundles.Keys) {
+            prod = prod.mul(CoPrimes.CoPrime16(bundleNum));
         }
-        /*
-        var t0 = new Big(this.min_bundles);
-        //console.log('t0', t0);
-        var t1 = new Big(65536).pow(t0);
-        */
         
-        var t1 = Big.pow(65536, (uint)min_bundles);
+        var t1 = Big.pow(65536, (uint)_minBundles);
         var t2 = prod.gt(t1);
         return t2; //prod.gt(mpz(65536).pow(mpz(this.num_hunks)));
     }
@@ -72,60 +64,39 @@ public class Bucket: ChineseBase
     public byte[] RecoverData() {
         //console.log('--------------------');
         var hunks = new List<byte[]>();
-        var subset_cops = new List<Big>();
-        foreach (var bundle_num in bundles.Keys) {
-            subset_cops.Add(CoPrimes.coprime16(bundle_num));
+        var subsetCops = new List<Big>();
+        foreach (var bundleNum in _bundles.Keys) {
+            subsetCops.Add(CoPrimes.CoPrime16(bundleNum));
         }
-        for (var hunk_num = 0; hunk_num < num_hunks; hunk_num++) {
-            //console.log('~~~~~~~~~~~~~~~~~~~~~~~');
+        for (var hunkNum = 0; hunkNum < _numHunks; hunkNum++) {
             var parts = new List<Big>();
-            foreach (var bundle_num in bundles.Keys) {
-                parts.Add(new Big(256 * bundles[bundle_num][hunk_num * slice_size] +
-                               bundles[bundle_num][hunk_num * slice_size + 1]));
+            foreach (var bundleNum in _bundles.Keys) {
+                parts.Add(new Big(256 * _bundles[bundleNum][hunkNum * _sliceSize] +
+                               _bundles[bundleNum][hunkNum * _sliceSize + 1]));
             }
-            //console.log('parts', parts);
-            //console.log('subset_cops', subset_cops);
-            var mpz_hunk = CoPrimes.combine(parts, subset_cops);
-            var hunk = mpz_hunk.ToBuffer();
-            if (hunk.Length < hunk_size) {
-                //console.log('short hunk');
-                var padding = new byte[hunk_size - hunk.Length];
-                //padding.set(0);
-                //hunk = Buffer.concat([hunk, padding]);
+            
+            var bigIntHunk = CoPrimes.Combine(parts, subsetCops);
+            var hunk = bigIntHunk.ToBuffer();
+            if (hunk.Length < _hunkSize) {
+                var padding = new byte[_hunkSize - hunk.Length];
+                
                 hunks.Add(hunk);
                 hunks.Add(padding);
-                assert(hunk.Length + padding.Length == hunk_size);
-            } else if (hunk.Length > hunk_size) {
-                //console.log('long hunk', hunk.length, this.hunk_size);
-                //console.log('mpz_hunk', mpz_hunk);
-                //console.log('hunk', hunk);
+                Assert(hunk.Length + padding.Length == _hunkSize);
+            } else if (hunk.Length > _hunkSize) {
+                bigIntHunk = CoPrimes.Combine(RemoveLast(parts), RemoveLast(subsetCops));
+                hunk = bigIntHunk.ToBuffer();
 
-                //mpz_hunk = CoPrimes.combine(Slice(parts, 0, -1), Slice(subset_cops,0, -1));
-                mpz_hunk = CoPrimes.combine(RemoveLast(parts), RemoveLast(subset_cops));
-                hunk = mpz_hunk.ToBuffer();
-
-                //console.log('mpz_hunk', mpz_hunk);
-                //console.log('hunk', hunk);
-                assert(hunk.Length == hunk_size);
-                //process.exit(1);
-                throw new Exception("not sure what this is about?"); // TODO: find out
+                Assert(hunk.Length == _hunkSize);
+                hunks.Add(hunk);
             } else {
-                //console.log('hunk size OK');
-                //console.log('mpz_hunk', mpz_hunk);
-                //console.log('hunk', hunk);
                 hunks.Add(hunk);
             }
-            //hunks.push(hunk);
         }
-        /*
-        var buffer = Buffer.concat(hunks);
-        console.log(buffer.length, this.padded_length);
-        assert(buffer.length === this.padded_length);
-        return buffer.slice(0, this.length);
-        */
+        
         var fullLength = WholeSize(hunks);
-        assert(fullLength == padded_length);
-        return RepackToArray(hunks, length);
+        Assert(fullLength == _paddedLength);
+        return RepackToArray(hunks, _length);
     }
 
     private static List<Big> RemoveLast(IReadOnlyList<Big> src)
@@ -140,12 +111,13 @@ public class Bucket: ChineseBase
 
     private byte[] RepackToArray(List<byte[]> hunks, int size)
     {
-        var output = new byte[size];
+        var output = new byte[size]; // this is the size it should be
         var position = 0;
 
         foreach (var byteValue in hunks.SelectMany(hunk => hunk))
         {
             output[position++] = byteValue;
+            if (position >= size) break; // sometimes we will go over due to bundle size
         }
 
         return output;

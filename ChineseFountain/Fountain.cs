@@ -5,49 +5,41 @@
 /// </summary>
 public class Fountain: ChineseBase
 {
-    private int bundle_size;
-    private int bundle_shorts;
-    private int length;
-    private int padded_length;
-    private byte[] padded_data;
-    private int min_bundles;
-    private int slice_size;
-    private int hunk_size;
-    private int num_hunks;
-    private Big[] mpz_hunks;
+    private readonly int _bundleSize;
+    private readonly int _bundleShorts;
+    private readonly Big[] _mpzHunks;
 
-    // <summary>
+    /// <summary>
     /// Create a new 'fountain' source for the given data to be transmitted
     /// </summary>
     /// <param name="data">Complete data to be transmitted</param>
     /// <param name="bundleSize">size that each transmit packet should be (in bytes)</param>
     public Fountain(byte[] data, int bundleSize) {
-        bundle_size = bundleSize;
-        bundle_shorts = 0 | (bundle_size / SIZE_OF_SHORT);
-        assert(bundle_shorts * SIZE_OF_SHORT == bundleSize); // throw if odd bundle_size
+        _bundleSize = bundleSize;
+        _bundleShorts = _bundleSize / SizeOfShort;
+        Assert(_bundleShorts * SizeOfShort == bundleSize); // throw if odd bundle_size
 
-        length = data.Length;
-        padded_length = div_round_up(length, bundle_size) * bundle_size;
-        var padding = new byte[padded_length - length];
+        var length = data.Length;
+        var paddedLength = div_round_up(length, _bundleSize) * _bundleSize;
+        var padding = new byte[paddedLength - length];
         
-        padded_data = data.Concat(padding).ToArray(); // see if this can be just Enumerable<byte>
+        var paddedData = data.Concat(padding).ToArray();
 
         // TODO: handle data whose size is not divisible by BUNDLE_SHORTS
-        min_bundles = padded_length / bundle_size;
-        if (min_bundles > 100) throw new Exception($"data too long, would require more than {min_bundles} bundles");
+        var minBundles = paddedLength / _bundleSize;
+        if (minBundles > 100) throw new Exception($"data too long, would require more than {minBundles} bundles");
 
-        slice_size = SIZE_OF_SHORT;
-        hunk_size = min_bundles * slice_size;
-        num_hunks = 0 | (padded_length / hunk_size);
-        assert(num_hunks == padded_length / hunk_size);
+        var hunkSize = minBundles * SizeOfShort;
+        var numHunks = 0 | (paddedLength / hunkSize);
+        Assert(numHunks == paddedLength / hunkSize);
 
-        mpz_hunks = new Big[num_hunks];
-        for (var i = 0; i < num_hunks; i++) {
+        _mpzHunks = new Big[numHunks];
+        for (var i = 0; i < numHunks; i++) {
             //var hunk = this.padded_data.slice(i * this.hunk_size, (i+1) * this.hunk_size); // inclusive lower bound, exclusive upper bound
-            var hunk = padded_data.Skip(i * hunk_size).Take(hunk_size).ToArray(); // inclusive lower bound, exclusive upper bound
+            var hunk = paddedData.Skip(i * hunkSize).Take(hunkSize).ToArray(); // inclusive lower bound, exclusive upper bound
             
-            assert(hunk_size == hunk.Length);
-            mpz_hunks[i] = Big.FromBuffer(hunk);
+            Assert(hunkSize == hunk.Length);
+            _mpzHunks[i] = Big.FromBuffer(hunk);
         }
     }
     
@@ -59,25 +51,25 @@ public class Fountain: ChineseBase
     /// </summary>
     /// <param name="bundleNum">Count of the bundle. This should start at zero and increment.</param>
     public byte[] Generate(int bundleNum) {
-        var buffer = new byte[bundle_size];
-        for (var i = 0; i < bundle_shorts; i++) {
-            var mpz_hunk = mpz_hunks[i];
+        var buffer = new byte[_bundleSize];
+        for (var i = 0; i < _bundleShorts; i++) {
+            var mpzHunk = _mpzHunks[i];
             
-            var part = mpz_hunk.mod(CoPrimes.coprime16(bundleNum));
+            var part = mpzHunk.mod(CoPrimes.CoPrime16(bundleNum));
             
-            var part_buf = part.ToBuffer();
+            var partBuf = part.ToBuffer();
             
-            if (part_buf.Length == 2) {
-                buffer[i * SIZE_OF_SHORT] = part_buf[0];
-                buffer[i * SIZE_OF_SHORT + 1] = part_buf[1];
-            } else if (part_buf.Length == 1) {
-                buffer[i * SIZE_OF_SHORT] = 0;
-                buffer[i * SIZE_OF_SHORT + 1] = part_buf[0];
-            }else if (part_buf.Length == 0) { // an actual 'zero' value
-                buffer[i * SIZE_OF_SHORT] = 0;
-                buffer[i * SIZE_OF_SHORT + 1] = 0;
+            if (partBuf.Length == 2) {
+                buffer[i * SizeOfShort] = partBuf[0];
+                buffer[i * SizeOfShort + 1] = partBuf[1];
+            } else if (partBuf.Length == 1) {
+                buffer[i * SizeOfShort] = 0;
+                buffer[i * SizeOfShort + 1] = partBuf[0];
+            }else if (partBuf.Length == 0) { // an actual 'zero' value
+                buffer[i * SizeOfShort] = 0;
+                buffer[i * SizeOfShort + 1] = 0;
             } else {
-                throw new Exception($"Data overflow. Bundle {bundleNum} created a packet of size {part_buf.Length}");
+                throw new Exception($"Data overflow. Bundle {bundleNum} created a packet of size {partBuf.Length}");
             }
         }
         return buffer;

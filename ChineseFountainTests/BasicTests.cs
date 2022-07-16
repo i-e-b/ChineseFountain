@@ -9,9 +9,6 @@ public class BasicTests
     // TODO: out of order; wrong sequence number; corrupted.
     // Will need to wrap the algo in an outer packet with x-sum and position?
     
-    // Also, check that some patterns work -- like all 1s or all 0s.
-    
-    
     [Test]
     public void first_run()
     {
@@ -27,6 +24,71 @@ public class BasicTests
         
         Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits");
     }
+    
+    
+    [Test]
+    public void giving_the_wrong_bundle_index_will_fail_to_recover()
+    {
+        Big.ResetSize();
+        byte[] original = MakeData(4096);
+        var source = new Fountain(original, 64);
+        var target = new Bucket(original.Length, 64);
+
+        int i;
+        for (i = 0; i < 900; i++)
+        {
+            if (target.IsComplete()) break;
+            target.Push(900 - i, source.Generate(i)); // Push is out-of-order from generate
+        }
+        
+        var recSize = 64*(i-1);
+        Console.WriteLine($"Completed after {i} bundles: {recSize} bytes to transmit {original.Length}");
+        
+        Assert.That(target.IsComplete(), Is.True, "Target did not complete");
+        
+        Assert.Throws(Is.Not.Null, () =>
+        {
+            _ = target.RecoverData();
+        });
+
+        Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits");
+    }
+    
+    [Test, Ignore("not a feature!")]
+    public void feeding_corrupted_data_will_fail()
+    {
+        Big.ResetSize();
+        byte[] original = MakeData(4096);
+        var source = new Fountain(original, 64);
+        var target = new Bucket(original.Length, 64);
+
+        int i;
+        for (i = 0; i < 900; i++) // 900*64 -- generating 57600 bytes of transmit from 3072 bytes of source
+        {
+            if (target.IsComplete()) break;
+            var bundle = source.Generate(i);
+            
+            if (i == 10) bundle[32] = 0x80;
+            
+            target.Push(i, bundle);
+        }
+        
+        var recSize = 64*(i-1);
+        Console.WriteLine($"Completed after {i} bundles: {recSize} bytes to transmit {original.Length}");
+        
+        Assert.That(target.IsComplete(), Is.True, "Target did not complete");
+        
+        var final = target.RecoverData();
+        
+        Assert.That(final.Length, Is.EqualTo(original.Length), "Data length is incorrect");
+
+        for (i = 0; i < final.Length; i++)
+        {
+            Assert.That(final[i], Is.EqualTo(original[i]), $"Data corrupt at index {i}");
+        }
+        
+        Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits");
+    }
 
     [Test]
     public void recovering_data_easy()
@@ -38,6 +100,107 @@ public class BasicTests
 
         int i;
         for (i = 0; i < 900; i++) // 900*64 -- generating 57600 bytes of transmit from 3072 bytes of source
+        {
+            if (target.IsComplete()) break;
+            target.Push(i, source.Generate(i));
+        }
+        
+        var recSize = 64*(i-1);
+        Console.WriteLine($"Completed after {i} bundles: {recSize} bytes to transmit {original.Length}");
+        
+        Assert.That(target.IsComplete(), Is.True, "Target did not complete");
+        
+        var final = target.RecoverData();
+        
+        Assert.That(final.Length, Is.EqualTo(original.Length), "Data length is incorrect");
+
+        for (i = 0; i < final.Length; i++)
+        {
+            Assert.That(final[i], Is.EqualTo(original[i]), $"Data corrupt at index {i}");
+        }
+        
+        Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits");
+    }
+
+    [Test, Ignore("Only one mb, but it fails")]
+    public void recovering_data_large()
+    {
+        // Only one mb, but it fails
+        Big.ResetSize();
+        byte[] original = MakeData(1024*1024);
+        var bundleSize = original.Length / 100;
+        bundleSize += bundleSize % 2;
+        Console.WriteLine($"Bundle size = {bundleSize}");
+        var source = new Fountain(original, bundleSize);
+        var target = new Bucket(original.Length, bundleSize);
+
+        int i;
+        for (i = 0; i < 900; i++)
+        {
+            if (target.IsComplete()) break;
+            target.Push(i, source.Generate(i));
+        }
+        
+        var recSize = bundleSize*(i-1);
+        Console.WriteLine($"Completed after {i} bundles: {recSize} bytes to transmit {original.Length}");
+        
+        Assert.That(target.IsComplete(), Is.True, "Target did not complete");
+        
+        var final = target.RecoverData(); // n^2 ?
+        
+        Assert.That(final.Length, Is.EqualTo(original.Length), "Data length is incorrect");
+
+        for (i = 0; i < final.Length; i++)
+        {
+            Assert.That(final[i], Is.EqualTo(original[i]), $"Data corrupt at index {i}");
+        }
+        
+        Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits");
+    }
+    
+    [Test]
+    public void recovering_data_all_zeros()
+    {
+        Big.ResetSize();
+        byte[] original = new byte[2048];
+        var source = new Fountain(original, 64);
+        var target = new Bucket(original.Length, 64);
+
+        int i;
+        for (i = 0; i < 900; i++)
+        {
+            if (target.IsComplete()) break;
+            target.Push(i, source.Generate(i));
+        }
+        
+        var recSize = 64*(i-1);
+        Console.WriteLine($"Completed after {i} bundles: {recSize} bytes to transmit {original.Length}");
+        
+        Assert.That(target.IsComplete(), Is.True, "Target did not complete");
+        
+        var final = target.RecoverData();
+        
+        Assert.That(final.Length, Is.EqualTo(original.Length), "Data length is incorrect");
+
+        for (i = 0; i < final.Length; i++)
+        {
+            Assert.That(final[i], Is.EqualTo(original[i]), $"Data corrupt at index {i}");
+        }
+        
+        Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits");
+    }
+    
+    [Test]
+    public void recovering_data_all_ones()
+    {
+        Big.ResetSize();
+        byte[] original = new byte[2048];
+        for (int j = 0; j < original.Length; j++) { original[j] = 0xFF; }
+        var source = new Fountain(original, 64);
+        var target = new Bucket(original.Length, 64);
+
+        int i;
+        for (i = 0; i < 900; i++)
         {
             if (target.IsComplete()) break;
             target.Push(i, source.Generate(i));

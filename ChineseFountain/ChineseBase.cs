@@ -5,9 +5,9 @@
 /// </summary>
 public class ChineseBase
 {
-    protected const int SIZE_OF_SHORT = 2;
+    protected const int SizeOfShort = 2;
     
-    protected static void assert(bool p0) { if (!p0) throw new Exception("assertion failed"); }
+    protected static void Assert(bool p0) { if (!p0) throw new Exception("assertion failed"); }
     
     protected static int div_round_up(int num, int divisor) {
         if (num < 0) throw new Exception("num < 0");

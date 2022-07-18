@@ -5,10 +5,9 @@
 /// </summary>
 public class ByteMap
 {
-    // TODO: this might not be needed
+    // TODO: replace with position/value pairs
     
-    private Dictionary<int, byte[]> _data = new();
-
+    private readonly Dictionary<int, byte[]> _data = new();
 
     public byte[] this[int bundleNum]
     {

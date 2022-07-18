@@ -5,53 +5,57 @@ namespace ChineseFountain
 {
     public class BigInteger
     {
+        private const long IntMask = 0xffffffffL;
 
-        private int sign; // -1 means -ve; +1 means +ve; 0 means 0;
-        private int[] magnitude; // array of ints with [0] being the most significant
-        private int nBits = -1; // cache bitCount() value
-        private int nBitLength = -1; // cache bitLength() value
-        private static readonly long IMASK = 0xffffffffL;
-        private long mQuote = -1L; // -m^(-1) mod b, b = 2^32 (see Montgomery mult.)
+        private int _sign; // -1 means -ve; +1 means +ve; 0 means 0;
+        private int[] _magnitude; // array of ints with [0] being the most significant
+        private int _nBitLength = -1; // cache bitLength() value
 
-        private BigInteger()
-        {
+        private BigInteger() { _magnitude = Array.Empty<int>(); }
+        
+        private BigInteger(BigInteger other) {
+            _sign = other._sign;
+            _nBitLength = other._nBitLength;
+            
+            _magnitude = new int[other._magnitude.Length];
+            for (int i = 0; i < other._magnitude.Length; i++) { _magnitude[i] = other._magnitude[i]; }
         }
 
-        private BigInteger(int signum, int[] mag)
+        private BigInteger(int sign, int[] mag)
         {
-            sign = signum;
+            _sign = sign;
             if (mag.Length > 0)
             {
-                int i = 0;
+                var i = 0;
                 while (i < mag.Length && mag[i] == 0)
                 {
                     i++;
                 }
                 if (i == 0)
                 {
-                    magnitude = mag;
+                    _magnitude = mag;
                 }
                 else
                 {
                     // strip leading 0 bytes
-                    int[] newMag = new int[mag.Length - i];
+                    var newMag = new int[mag.Length - i];
                     Array.Copy(mag, i, newMag, 0, newMag.Length);
-                    magnitude = newMag;
+                    _magnitude = newMag;
                     if (newMag.Length == 0)
-                        sign = 0;
+                        _sign = 0;
                 }
             }
             else
             {
-                magnitude = mag;
-                sign = 0;
+                _magnitude = mag;
+                _sign = 0;
             }
         }
 
-        public BigInteger(String sval) //throws FormatException
+        private BigInteger(string sval) //throws FormatException
             : this(sval, 10) { }
 
-        public BigInteger(String sval, int rdx) //throws FormatException
+        private BigInteger(string sval, int rdx) //throws FormatException
         {
             if (sval.Length == 0)
             {
@@ -68,12 +72,12 @@ namespace ChineseFountain
                     style = NumberStyles.AllowHexSpecifier;
                     break;
                 default:
-                    throw new FormatException("Only base 10 or 16 alllowed");
+                    throw new FormatException("Only base 10 or 16 allowed");
             }
 
 
-            int index = 0;
-            sign = 1;
+            var index = 0;
+            _sign = 1;
 
             if (sval[0] == '-')
             {
@@ -82,12 +86,12 @@ namespace ChineseFountain
                     throw new FormatException("Zero length BigInteger");
                 }
 
-                sign = -1;
+                _sign = -1;
                 index = 1;
             }
 
             // strip leading zeros from the string value
-            while (index < sval.Length && Int32.Parse(sval[index].ToString(), style) == 0)
+            while (index < sval.Length && int.Parse(sval[index].ToString(), style) == 0)
             {
                 index++;
             }
@@ -95,8 +99,8 @@ namespace ChineseFountain
             if (index >= sval.Length)
             {
                 // zero value - we're done
-                sign = 0;
-                magnitude = new int[0];
+                _sign = 0;
+                _magnitude = Array.Empty<int>();
                 return;
             }
 
@@ -106,72 +110,57 @@ namespace ChineseFountain
             // storage in one hit?, then generate the magnitude in one hit too?
             //////
 
-            BigInteger b = BigInteger.ZERO;
-            BigInteger r = valueOf(rdx);
+            var b = Zero;
+            var r = ValueOf(rdx);
             while (index < sval.Length)
             {
                 // (optimise this by taking chunks of digits instead?)
-                b = b.multiply(r).add(valueOf(Int32.Parse(sval[index].ToString(), style)));
+                b = b.Multiply(r).Add(ValueOf(int.Parse(sval[index].ToString(), style)));
                 index++;
             }
 
-            magnitude = b.magnitude;
-            return;
+            _magnitude = b._magnitude;
         }
 
-        public BigInteger(byte[] bval) //throws FormatException
+        private BigInteger(byte[] bVal) //throws FormatException
         {
-            if (bval.Length == 0)
-            {
-                throw new FormatException("Zero length BigInteger");
-            }
+            if (bVal.Length == 0) { throw new FormatException("Zero length BigInteger"); }
 
-            sign = 1;
-            if (bval[0] < 0)
-            {
-                // FIXME:
-                int iBval;
-                sign = -1;
-                // strip leading sign bytes
-                for (iBval = 0; iBval < bval.Length && ((sbyte)bval[iBval] == -1); iBval++) ;
-                magnitude = new int[(bval.Length - iBval) / 2 + 1];
-                // copy bytes to magnitude
-                // invert bytes then add one to find magnitude of value
-            }
-            else
-            {
-                // strip leading zero bytes and return magnitude bytes
-                magnitude = makeMagnitude(bval);
-            }
+            _sign = 1;
+            
+            // strip leading zero bytes and return magnitude bytes
+            _magnitude = MakeMagnitude(bVal);
         }
 
-        private int[] makeMagnitude(byte[] bval)
+        private static int[] MakeMagnitude(byte[] bVal)
         {
             int i;
-            int[] mag;
             int firstSignificant;
 
             // strip leading zeros
-            for (firstSignificant = 0; firstSignificant < bval.Length
-                    && bval[firstSignificant] == 0; firstSignificant++) ;
-
-            if (firstSignificant >= bval.Length)
+            for (firstSignificant = 0;
+                 firstSignificant < bVal.Length && bVal[firstSignificant] == 0;
+                 firstSignificant++)
             {
-                return new int[0];
             }
 
-            int nInts = (bval.Length - firstSignificant + 3) / 4;
-            int bCount = (bval.Length - firstSignificant) % 4;
+            if (firstSignificant >= bVal.Length)
+            {
+                return Array.Empty<int>();
+            }
+
+            var nInts = (bVal.Length - firstSignificant + 3) / 4;
+            var bCount = (bVal.Length - firstSignificant) % 4;
             if (bCount == 0)
                 bCount = 4;
 
-            mag = new int[nInts];
-            int v = 0;
-            int magnitudeIndex = 0;
-            for (i = firstSignificant; i < bval.Length; i++)
+            var mag = new int[nInts];
+            var v = 0;
+            var magnitudeIndex = 0;
+            for (i = firstSignificant; i < bVal.Length; i++)
             {
                 v <<= 8;
-                v |= bval[i] & 0xff;
+                v |= bVal[i] & 0xff;
                 bCount--;
                 if (bCount <= 0)
                 {
@@ -192,50 +181,45 @@ namespace ChineseFountain
 
         public BigInteger(int sign, byte[] mag) //throws FormatException
         {
-            if (sign < -1 || sign > 1)
+            switch (sign)
             {
-                throw new FormatException("Invalid sign value");
+                case < -1:
+                case > 1:
+                    throw new FormatException("Invalid sign value");
+                case 0:
+                    _sign = 0;
+                    _magnitude = Array.Empty<int>();
+                    return;
+                
+                default:
+                    // copy bytes
+                    _magnitude = MakeMagnitude(mag);
+                    this._sign = sign;
+                    break;
             }
-
-            if (sign == 0)
-            {
-                this.sign = 0;
-                this.magnitude = new int[0];
-                return;
-            }
-
-            // copy bytes
-            this.magnitude = makeMagnitude(mag);
-            this.sign = sign;
         }
 
-        private static readonly int BITS_PER_BYTE = 8;
-        private static readonly int BYTES_PER_INT = 4;
-
-        public BigInteger abs()
-        {
-            return (sign >= 0) ? this : this.negate();
-        }
+        private BigInteger Abs() => _sign >= 0 ? this : Negate();
 
         /**
          * return a = a + b - b preserved.
          */
-        private int[] add(int[] a, int[] b)
+        private static int[] Add(int[] a, int[] b)
         {
-            int tI = a.Length - 1;
-            int vI = b.Length - 1;
+            var tI = a.Length - 1;
+            var vI = b.Length - 1;
             long m = 0;
 
             while (vI >= 0)
             {
-                m += (((long)a[tI]) & IMASK) + (((long)b[vI--]) & IMASK);
+                m += (a[tI] & IntMask) + (b[vI--] & IntMask);
                 a[tI--] = (int)m;
                 m = (long)((ulong)m >> 32);
             }
 
             while (tI >= 0 && m != 0)
             {
-                m += (((long)a[tI]) & IMASK);
+                m += a[tI] & IntMask;
                 a[tI--] = (int)m;
                 m = (long)((ulong)m >> 32);
             }
@@ -243,22 +227,22 @@ namespace ChineseFountain
             return a;
         }
 
-        public BigInteger add(BigInteger val) //throws ArithmeticException
+        public BigInteger Add(BigInteger val) //throws ArithmeticException
         {
-            if (val.sign == 0 || val.magnitude.Length == 0)
+            if (val._sign == 0 || val._magnitude.Length == 0)
                 return this;
-            if (this.sign == 0 || this.magnitude.Length == 0)
+            if (_sign == 0 || _magnitude.Length == 0)
                 return val;
 
-            if (val.sign < 0)
+            if (val._sign < 0)
             {
-                if (this.sign > 0)
-                    return this.subtract(val.negate());
+                if (_sign > 0)
+                    return Subtract(val.Negate());
             }
             else
             {
-                if (this.sign < 0)
-                    return val.subtract(this.negate());
+                if (_sign < 0)
+                    return val.Subtract(Negate());
             }
 
             // both BigIntegers are either +ve or -ve; set the sign later
@@ -266,42 +250,25 @@ namespace ChineseFountain
             int[] mag,
             op;
 
-            if (this.magnitude.Length < val.magnitude.Length)
+            if (_magnitude.Length < val._magnitude.Length)
             {
-                mag = new int[val.magnitude.Length + 1];
+                mag = new int[val._magnitude.Length + 1];
 
-                Array.Copy(val.magnitude, 0, mag, 1, val.magnitude.Length);
-                op = this.magnitude;
+                Array.Copy(val._magnitude, 0, mag, 1, val._magnitude.Length);
+                op = _magnitude;
             }
             else
             {
-                mag = new int[this.magnitude.Length + 1];
+                mag = new int[_magnitude.Length + 1];
 
-                Array.Copy(this.magnitude, 0, mag, 1, this.magnitude.Length);
-                op = val.magnitude;
+                Array.Copy(_magnitude, 0, mag, 1, _magnitude.Length);
+                op = val._magnitude;
             }
 
-            return new BigInteger(this.sign, add(mag, op));
+            return new BigInteger(_sign, Add(mag, op));
         }
 
-        public int bitCount()
-        {
-            if (nBits == -1)
-            {
-                nBits = 0;
-                for (int i = 0; i < magnitude.Length; i++)
-                {
-                    nBits += bitCounts[magnitude[i] & 0xff];
-                    nBits += bitCounts[(magnitude[i] >> 8) & 0xff];
-                    nBits += bitCounts[(magnitude[i] >> 16) & 0xff];
-                    nBits += bitCounts[(magnitude[i] >> 24) & 0xff];
-                }
-            }
-
-            return nBits;
-        }
-
-        private readonly static byte[] bitCounts = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1,
+        private static readonly byte[] _bitCounts = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1,
             2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4,
             4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3,
             4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 2, 3, 3, 4, 3, 4, 4, 5,
@@ -312,137 +279,109 @@ namespace ChineseFountain
             5, 6, 6, 7, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 4, 5, 5, 6, 5, 6, 6, 7, 5,
             6, 6, 7, 6, 7, 7, 8};
 
-        private int bitLength(int indx, int[] mag)
+        private int BitLength(int idx, int[] mag)
         {
-            int bitLength;
-
             if (mag.Length == 0)
             {
                 return 0;
             }
-            else
+
+            while (idx != mag.Length && mag[idx] == 0)
             {
-                while (indx != mag.Length && mag[indx] == 0)
+                idx++;
+            }
+
+            if (idx == mag.Length)
+            {
+                return 0;
+            }
+
+            // bit length for everything after the first int
+            var bitLength = 32 * (mag.Length - idx - 1);
+
+            // and determine bitLength of first int
+            bitLength += BitLen(mag[idx]);
+
+            if (_sign < 0)
+            {
+                // Check if magnitude is a power of two
+                var pow2 = _bitCounts[mag[idx] & 0xff]
+                    + _bitCounts[(mag[idx] >> 8) & 0xff]
+                    + _bitCounts[(mag[idx] >> 16) & 0xff] + _bitCounts[(mag[idx] >> 24) & 0xff] == 1;
+
+                for (var i = idx + 1; i < mag.Length && pow2; i++)
                 {
-                    indx++;
+                    pow2 = mag[i] == 0;
                 }
 
-                if (indx == mag.Length)
-                {
-                    return 0;
-                }
-
-                // bit length for everything after the first int
-                bitLength = 32 * ((mag.Length - indx) - 1);
-
-                // and determine bitlength of first int
-                bitLength += bitLen(mag[indx]);
-
-                if (sign < 0)
-                {
-                    // Check if magnitude is a power of two
-                    bool pow2 = ((bitCounts[mag[indx] & 0xff])
-                            + (bitCounts[(mag[indx] >> 8) & 0xff])
-                            + (bitCounts[(mag[indx] >> 16) & 0xff]) + (bitCounts[(mag[indx] >> 24) & 0xff])) == 1;
-
-                    for (int i = indx + 1; i < mag.Length && pow2; i++)
-                    {
-                        pow2 = (mag[i] == 0);
-                    }
-
-                    bitLength -= (pow2 ? 1 : 0);
-                }
+                bitLength -= pow2 ? 1 : 0;
             }
 
             return bitLength;
         }
 
-        public int bitLength()
+        public int BitLength()
         {
-            if (nBitLength == -1)
-            {
-                if (sign == 0)
-                {
-                    nBitLength = 0;
-                }
-                else
-                {
-                    nBitLength = bitLength(0, magnitude);
-                }
-            }
+            if (_nBitLength != -1) return _nBitLength;
+            
+            _nBitLength = _sign == 0 ? 0 : BitLength(0, _magnitude);
 
-            return nBitLength;
+            return _nBitLength;
         }
 
         //
         // bitLen(val) is the number of bits in val.
         //
-        static int bitLen(int w)
+        private static int BitLen(int w)
         {
             // Binary search - decision tree (5 tests, rarely 6)
-            return (w < 1 << 15 ? (w < 1 << 7
-                    ? (w < 1 << 3 ? (w < 1 << 1
-                            ? (w < 1 << 0 ? (w < 0 ? 32 : 0) : 1)
-                            : (w < 1 << 2 ? 2 : 3)) : (w < 1 << 5
-                            ? (w < 1 << 4 ? 4 : 5)
-                            : (w < 1 << 6 ? 6 : 7)))
-                    : (w < 1 << 11
-                            ? (w < 1 << 9 ? (w < 1 << 8 ? 8 : 9) : (w < 1 << 10 ? 10 : 11))
-                            : (w < 1 << 13 ? (w < 1 << 12 ? 12 : 13) : (w < 1 << 14 ? 14 : 15)))) : (w < 1 << 23 ? (w < 1 << 19
-                    ? (w < 1 << 17 ? (w < 1 << 16 ? 16 : 17) : (w < 1 << 18 ? 18 : 19))
-                    : (w < 1 << 21 ? (w < 1 << 20 ? 20 : 21) : (w < 1 << 22 ? 22 : 23))) : (w < 1 << 27
-                    ? (w < 1 << 25 ? (w < 1 << 24 ? 24 : 25) : (w < 1 << 26 ? 26 : 27))
-                    : (w < 1 << 29 ? (w < 1 << 28 ? 28 : 29) : (w < 1 << 30 ? 30 : 31)))));
-        }
-
-        private readonly static byte[] bitLengths = {0, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4,
-            5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-            6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-            7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-            7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8,
-            8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
-            8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
-            8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
-            8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
-            8, 8, 8, 8, 8, 8, 8, 8};
-
-        public int compareTo(Object o)
-        {
-            return compareTo((BigInteger)o);
+            return w < 1 << 15 ? w < 1 << 7
+                ? w < 1 << 3 ? w < 1 << 1
+                    ? w < 1 << 0 ? w < 0 ? 32 : 0 : 1
+                    : w < 1 << 2 ? 2 : 3 : w < 1 << 5
+                    ? w < 1 << 4 ? 4 : 5
+                    : w < 1 << 6 ? 6 : 7
+                : w < 1 << 11
+                    ? w < 1 << 9 ? w < 1 << 8 ? 8 : 9 : w < 1 << 10 ? 10 : 11
+                    : w < 1 << 13 ? w < 1 << 12 ? 12 : 13 : w < 1 << 14 ? 14 : 15 : w < 1 << 23 ? w < 1 << 19
+                ? w < 1 << 17 ? w < 1 << 16 ? 16 : 17 : w < 1 << 18 ? 18 : 19
+                : w < 1 << 21 ? w < 1 << 20 ? 20 : 21 : w < 1 << 22 ? 22 : 23 : w < 1 << 27
+                ? w < 1 << 25 ? w < 1 << 24 ? 24 : 25 : w < 1 << 26 ? 26 : 27
+                : w < 1 << 29 ? w < 1 << 28 ? 28 : 29 : w < 1 << 30 ? 30 : 31;
         }
 
         /**
          * unsigned comparison on two arrays - note the arrays may
          * start with leading zeros.
          */
-        private int compareTo(int xIndx, int[] x, int yIndx, int[] y)
+        private static int CompareTo(int xIdx, int[] x, int yIdx, int[] y)
         {
-            while (xIndx != x.Length && x[xIndx] == 0)
+            while (xIdx != x.Length && x[xIdx] == 0)
             {
-                xIndx++;
+                xIdx++;
             }
 
-            while (yIndx != y.Length && y[yIndx] == 0)
+            while (yIdx != y.Length && y[yIdx] == 0)
             {
-                yIndx++;
+                yIdx++;
             }
 
-            if ((x.Length - xIndx) < (y.Length - yIndx))
+            if (x.Length - xIdx < y.Length - yIdx)
             {
                 return -1;
             }
 
-            if ((x.Length - xIndx) > (y.Length - yIndx))
+            if (x.Length - xIdx > y.Length - yIdx)
             {
                 return 1;
             }
 
             // lengths of magnitudes the same, test the magnitude values
 
-            while (xIndx < x.Length)
+            while (xIdx < x.Length)
             {
-                long v1 = (long)(x[xIndx++]) & IMASK;
-                long v2 = (long)(y[yIndx++]) & IMASK;
+                var v1 = x[xIdx++] & IntMask;
+                var v2 = y[yIdx++] & IntMask;
                 if (v1 < v2)
                 {
                     return -1;
@@ -456,39 +395,39 @@ namespace ChineseFountain
             return 0;
         }
 
-        public int compareTo(BigInteger val)
+        public int CompareTo(BigInteger val)
         {
-            if (sign < val.sign)
+            if (_sign < val._sign)
                 return -1;
-            if (sign > val.sign)
+            if (_sign > val._sign)
                 return 1;
 
-            return compareTo(0, magnitude, 0, val.magnitude);
+            return CompareTo(0, _magnitude, 0, val._magnitude);
         }
 
         /**
          * return z = x / y - done in place (z value preserved, x contains the
          * remainder)
          */
-        private int[] divide(int[] x, int[] y)
+        private int[] Divide(int[] x, int[] y)
         {
-            int xyCmp = compareTo(0, x, 0, y);
+            var xyCmp = CompareTo(0, x, 0, y);
             int[] count;
 
             if (xyCmp > 0)
             {
                 int[] c;
 
-                int shift = bitLength(0, x) - bitLength(0, y);
+                var shift = BitLength(0, x) - BitLength(0, y);
 
                 if (shift > 1)
                 {
                     c = shiftLeft(y, shift - 1);
-                    count = shiftLeft(ONE.magnitude, shift - 1);
+                    count = shiftLeft(_one._magnitude, shift - 1);
                     if (shift % 32 == 0)
                     {
                         // Special case where the shift is the size of an int.
-                        int[] countSpecial = new int[shift / 32 + 1];
+                        var countSpecial = new int[shift / 32 + 1];
                         Array.Copy(count, 0, countSpecial, 1, countSpecial.Length - 1);
                         countSpecial[0] = 0;
                         count = countSpecial;
@@ -503,27 +442,27 @@ namespace ChineseFountain
                     count[0] = 1;
                 }
 
-                int[] iCount = new int[count.Length];
+                var iCount = new int[count.Length];
 
-                subtract(0, x, 0, c);
+                Subtract(0, x, 0, c);
                 Array.Copy(count, 0, iCount, 0, count.Length);
 
-                int xStart = 0;
-                int cStart = 0;
-                int iCountStart = 0;
+                var xStart = 0;
+                var cStart = 0;
+                var iCountStart = 0;
 
                 for (; ; )
                 {
-                    int cmp = compareTo(xStart, x, cStart, c);
+                    var cmp = CompareTo(xStart, x, cStart, c);
 
                     while (cmp >= 0)
                     {
-                        subtract(xStart, x, cStart, c);
-                        add(count, iCount);
-                        cmp = compareTo(xStart, x, cStart, c);
+                        Subtract(xStart, x, cStart, c);
+                        Add(count, iCount);
+                        cmp = CompareTo(xStart, x, cStart, c);
                     }
 
-                    xyCmp = compareTo(xStart, x, 0, y);
+                    xyCmp = CompareTo(xStart, x, 0, y);
 
                     if (xyCmp > 0)
                     {
@@ -532,7 +471,7 @@ namespace ChineseFountain
                             xStart++;
                         }
 
-                        shift = bitLength(cStart, c) - bitLength(xStart, x);
+                        shift = BitLength(cStart, c) - BitLength(xStart, x);
 
                         if (shift == 0)
                         {
@@ -557,8 +496,8 @@ namespace ChineseFountain
                     }
                     else if (xyCmp == 0)
                     {
-                        add(count, ONE.magnitude);
-                        for (int i = xStart; i != x.Length; i++)
+                        Add(count, _one._magnitude);
+                        for (var i = xStart; i != x.Length; i++)
                         {
                             x[i] = 0;
                         }
@@ -586,99 +525,61 @@ namespace ChineseFountain
             return count;
         }
 
-        public BigInteger divide(BigInteger val) //throws ArithmeticException
+        private BigInteger Divide(BigInteger val) //throws ArithmeticException
         {
-            if (val.sign == 0)
+            if (val._sign == 0)
             {
                 throw new ArithmeticException("Divide by zero");
             }
 
-            if (sign == 0)
+            if (_sign == 0)
             {
-                return BigInteger.ZERO;
+                return Zero;
             }
 
-            if (val.compareTo(BigInteger.ONE) == 0)
+            if (val.CompareTo(_one) == 0)
             {
                 return this;
             }
 
-            int[] mag = new int[this.magnitude.Length];
-            Array.Copy(this.magnitude, 0, mag, 0, mag.Length);
+            var mag = new int[_magnitude.Length];
+            Array.Copy(_magnitude, 0, mag, 0, mag.Length);
 
-            return new BigInteger(this.sign * val.sign, divide(mag, val.magnitude));
+            return new BigInteger(_sign * val._sign, Divide(mag, val._magnitude));
         }
 
-        public BigInteger[] divideAndRemainder(BigInteger val) //throws ArithmeticException
-        {
-            if (val.sign == 0)
-            {
-                throw new ArithmeticException("Divide by zero");
-            }
-
-            BigInteger[] biggies = new BigInteger[2];
-
-            if (sign == 0)
-            {
-                biggies[0] = biggies[1] = BigInteger.ZERO;
-
-                return biggies;
-            }
-
-            if (val.compareTo(BigInteger.ONE) == 0)
-            {
-                biggies[0] = this;
-                biggies[1] = BigInteger.ZERO;
-
-                return biggies;
-            }
-
-            int[] remainder = new int[this.magnitude.Length];
-            Array.Copy(this.magnitude, 0, remainder, 0, remainder.Length);
-
-            int[] quotient = divide(remainder, val.magnitude);
-
-            biggies[0] = new BigInteger(this.sign * val.sign, quotient);
-            biggies[1] = new BigInteger(this.sign, remainder);
-
-            return biggies;
-        }
-
-        public override bool Equals(Object val)
+        public override bool Equals(object? val)
         {
             if (val == this)
                 return true;
 
-            if (!(typeof(BigInteger).IsInstanceOfType(val)))
-                return false;
-            BigInteger biggie = (BigInteger)val;
-
-            if (biggie.sign != sign || biggie.magnitude.Length != magnitude.Length)
+            if (val is not BigInteger bigInteger)
                 return false;
 
-            for (int i = 0; i < magnitude.Length; i++)
+            if (bigInteger._sign != _sign || bigInteger._magnitude.Length != _magnitude.Length)
+                return false;
+
+            for (var i = 0; i < _magnitude.Length; i++)
             {
-                if (biggie.magnitude[i] != magnitude[i])
-                    return false;
+                if (bigInteger._magnitude[i] != _magnitude[i]) return false;
             }
 
             return true;
         }
 
-        public BigInteger gcd(BigInteger val)
+        public BigInteger Gcd(BigInteger val)
         {
-            if (val.sign == 0)
-                return this.abs();
-            else if (sign == 0)
-                return val.abs();
+            if (val._sign == 0)
+                return Abs();
+            if (_sign == 0)
+                return val.Abs();
 
-            BigInteger r;
-            BigInteger u = this;
-            BigInteger v = val;
+            var u = this;
+            var v = val;
 
-            while (v.sign != 0)
+            while (v._sign != 0)
             {
-                r = u.mod(v);
+                var r = u.Mod(v);
                 u = v;
                 v = r;
             }
@@ -688,97 +589,42 @@ namespace ChineseFountain
 
         public override int GetHashCode()
         {
-            return 0;
+            // ReSharper disable once NonReadonlyMemberInGetHashCode
+            return _magnitude.GetHashCode();
         }
 
-        public int intValue()
+        public BigInteger Mod(BigInteger m) //throws ArithmeticException
         {
-            if (magnitude.Length == 0)
-            {
-                return 0;
-            }
-
-            if (sign < 0)
-            {
-                return -magnitude[magnitude.Length - 1];
-            }
-            else
-            {
-                return magnitude[magnitude.Length - 1];
-            }
-        }
-
-        public long longValue()
-        {
-            long val = 0;
-
-            if (magnitude.Length == 0)
-            {
-                return 0;
-            }
-
-            if (magnitude.Length > 1)
-            {
-                val = ((long)magnitude[magnitude.Length - 2] << 32)
-                        | (magnitude[magnitude.Length - 1] & IMASK);
-            }
-            else
-            {
-                val = (magnitude[magnitude.Length - 1] & IMASK);
-            }
-
-            if (sign < 0)
-            {
-                return -val;
-            }
-            else
-            {
-                return val;
-            }
-        }
-
-        public BigInteger max(BigInteger val)
-        {
-            return (compareTo(val) > 0) ? this : val;
-        }
-
-        public BigInteger min(BigInteger val)
-        {
-            return (compareTo(val) < 0) ? this : val;
-        }
-
-        public BigInteger mod(BigInteger m) //throws ArithmeticException
-        {
-            if (m.sign <= 0)
+            if (m._sign <= 0)
             {
                 throw new ArithmeticException("BigInteger: modulus is not positive");
             }
 
-            BigInteger biggie = this.remainder(m);
+            var biggie = Remainder(m);
 
-            return (biggie.sign >= 0 ? biggie : biggie.add(m));
+            return biggie._sign >= 0 ? biggie : biggie.Add(m);
         }
 
-        public BigInteger modInverse(BigInteger m) //throws ArithmeticException
+        public BigInteger ModInverse(BigInteger m) //throws ArithmeticException
         {
-            if (m.sign != 1)
+            if (m._sign != 1)
             {
                 throw new ArithmeticException("Modulus must be positive");
             }
 
-            BigInteger x = new BigInteger();
-            BigInteger y = new BigInteger();
+            var x = new BigInteger();
+            var y = new BigInteger();
 
-            BigInteger gcd = BigInteger.extEuclid(this, m, x, y);
+            var gcd = ExtEuclid(this, m, x, y);
 
-            if (!gcd.Equals(BigInteger.ONE))
+            if (!gcd.Equals(_one))
             {
                 throw new ArithmeticException("Numbers not relatively prime.");
             }
 
-            if (x.compareTo(BigInteger.ZERO) < 0)
+            if (x.CompareTo(Zero) < 0)
             {
-                x = x.add(m);
+                x = x.Add(m);
             }
 
             return x;
@@ -801,255 +647,35 @@ namespace ChineseFountain
          * @param u2Out      the return object for the u2 value
          * @return     The greatest common divisor of a and b
          */
-        private static BigInteger extEuclid(BigInteger a, BigInteger b, BigInteger u1Out,
+        private static BigInteger ExtEuclid(BigInteger a, BigInteger b, BigInteger u1Out,
                 BigInteger u2Out)
         {
-            BigInteger res;
+            var u1 = _one;
+            var u3 = a;
+            var v1 = Zero;
+            var v3 = b;
 
-            BigInteger u1 = BigInteger.ONE;
-            BigInteger u3 = a;
-            BigInteger v1 = BigInteger.ZERO;
-            BigInteger v3 = b;
-
-            while (v3.compareTo(BigInteger.ZERO) > 0)
+            while (v3.CompareTo(Zero) > 0)
             {
-                BigInteger q,
-                tn;
-                //tv;
+                var q = u3.Divide(v3);
 
-                q = u3.divide(v3);
-
-                tn = u1.subtract(v1.multiply(q));
+                var tn = u1.Subtract(v1.Multiply(q));
                 u1 = v1;
                 v1 = tn;
 
-                tn = u3.subtract(v3.multiply(q));
+                tn = u3.Subtract(v3.Multiply(q));
                 u3 = v3;
                 v3 = tn;
             }
 
-            u1Out.sign = u1.sign;
-            u1Out.magnitude = u1.magnitude;
+            u1Out._sign = u1._sign;
+            u1Out._magnitude = u1._magnitude;
 
-            res = u3.subtract(u1.multiply(a)).divide(b);
-            u2Out.sign = res.sign;
-            u2Out.magnitude = res.magnitude;
+            var res = u3.Subtract(u1.Multiply(a)).Divide(b);
+            u2Out._sign = res._sign;
+            u2Out._magnitude = res._magnitude;
 
             return u3;
-        }
-
-        /**
-         * zero out the array x
-         */
-        private void zero(int[] x)
-        {
-            for (int i = 0; i != x.Length; i++)
-            {
-                x[i] = 0;
-            }
-        }
-
-        public BigInteger modPow(
-            BigInteger exponent,
-            BigInteger m)
-        //throws ArithmeticException
-        {
-            int[] zVal = null;
-            int[] yAccum = null;
-            int[] yVal;
-
-            // Montgomery exponentiation is only possible if the modulus is odd,
-            // but AFAIK, this is always the case for crypto algo's
-            bool useMonty = ((m.magnitude[m.magnitude.Length - 1] & 1) == 1);
-            long mQ = 0;
-            if (useMonty)
-            {
-                mQ = m.getMQuote();
-
-                // tmp = this * R mod m
-                BigInteger tmp = this.shiftLeft(32 * m.magnitude.Length).mod(m);
-                zVal = tmp.magnitude;
-
-                useMonty = (zVal.Length == m.magnitude.Length);
-
-                if (useMonty)
-                {
-                    yAccum = new int[m.magnitude.Length + 1];
-                }
-            }
-            
-            if (!useMonty)
-            {
-                if (magnitude.Length <= m.magnitude.Length)
-                {
-                    //zAccum = new int[m.magnitude.Length * 2];
-                    zVal = new int[m.magnitude.Length];
-
-                    Array.Copy(magnitude, 0, zVal, zVal.Length - magnitude.Length,
-                            magnitude.Length);
-                }
-                else
-                {
-                    //
-                    // in normal practice we'll never see this...
-                    //
-                    BigInteger tmp = this.remainder(m);
-
-                    //zAccum = new int[m.magnitude.Length * 2];
-                    zVal = new int[m.magnitude.Length];
-
-                    Array.Copy(tmp.magnitude, 0, zVal, zVal.Length - tmp.magnitude.Length,
-                            tmp.magnitude.Length);
-                }
-
-                yAccum = new int[m.magnitude.Length * 2];
-            }
-
-            yVal = new int[m.magnitude.Length];
-
-            //
-            // from LSW to MSW
-            //
-            for (int i = 0; i < exponent.magnitude.Length; i++)
-            {
-                int v = exponent.magnitude[i];
-                int bits = 0;
-
-                if (i == 0)
-                {
-                    while (v > 0)
-                    {
-                        v <<= 1;
-                        bits++;
-                    }
-
-                    //
-                    // first time in initialise y
-                    //
-                    Array.Copy(zVal, 0, yVal, 0, zVal.Length);
-
-                    v <<= 1;
-                    bits++;
-                }
-
-                while (v != 0)
-                {
-                    if (useMonty)
-                    {
-                        // Montgomery square algo doesn't exist, and a normal
-                        // square followed by a Montgomery reduction proved to
-                        // be almost as heavy as a Montgomery mulitply.
-                        multiplyMonty(yAccum, yVal, yVal, m.magnitude, mQ);
-                    }
-                    else
-                    {
-                        square(yAccum, yVal);
-                        remainder(yAccum, m.magnitude);
-                        Array.Copy(yAccum, yAccum.Length - yVal.Length, yVal, 0, yVal.Length);
-                        zero(yAccum);
-                    }
-                    bits++;
-
-                    if (v < 0)
-                    {
-                        if (useMonty)
-                        {
-                            multiplyMonty(yAccum, yVal, zVal, m.magnitude, mQ);
-                        }
-                        else
-                        {
-                            multiply(yAccum, yVal, zVal);
-                            remainder(yAccum, m.magnitude);
-                            Array.Copy(yAccum, yAccum.Length - yVal.Length, yVal, 0,
-                                    yVal.Length);
-                            zero(yAccum);
-                        }
-                    }
-
-                    v <<= 1;
-                }
-
-                while (bits < 32)
-                {
-                    if (useMonty)
-                    {
-                        multiplyMonty(yAccum, yVal, yVal, m.magnitude, mQ);
-                    }
-                    else
-                    {
-                        square(yAccum, yVal);
-                        remainder(yAccum, m.magnitude);
-                        Array.Copy(yAccum, yAccum.Length - yVal.Length, yVal, 0, yVal.Length);
-                        zero(yAccum);
-                    }
-                    bits++;
-                }
-            }
-
-            if (useMonty)
-            {
-                // Return y * R^(-1) mod m by doing y * 1 * R^(-1) mod m
-                zero(zVal);
-                zVal[zVal.Length - 1] = 1;
-                multiplyMonty(yAccum, yVal, zVal, m.magnitude, mQ);
-            }
-
-            return new BigInteger(1, yVal);
-        }
-
-        /**
-         * return w with w = x * x - w is assumed to have enough space.
-         */
-        private int[] square(int[] w, int[] x)
-        {
-            long u1,
-            u2,
-            c;
-
-            if (w.Length != 2 * x.Length)
-            {
-                throw new ArgumentException("no I don't think so...");
-            }
-
-            for (int i = x.Length - 1; i != 0; i--)
-            {
-                long v = (x[i] & IMASK);
-
-                u1 = v * v;
-                u2 = (long)((ulong)u1 >> 32);
-                u1 = u1 & IMASK;
-
-                u1 += (w[2 * i + 1] & IMASK);
-
-                w[2 * i + 1] = (int)u1;
-                c = u2 + (u1 >> 32);
-
-                for (int j = i - 1; j >= 0; j--)
-                {
-                    u1 = (x[j] & IMASK) * v;
-                    u2 = (long)((ulong)u1 >> 31); // multiply by 2!
-                    u1 = (u1 & 0x7fffffff) << 1; // multiply by 2!
-                    u1 += (w[i + j + 1] & IMASK) + c;
-
-                    w[i + j + 1] = (int)u1;
-                    c = u2 + (long)((ulong)u1 >> 32);
-                }
-                c += w[i] & IMASK;
-                w[i] = (int)c;
-                w[i - 1] = (int)(c >> 32);
-            }
-
-            u1 = (x[0] & IMASK);
-            u1 = u1 * u1;
-            u2 = (long)((ulong)u1 >> 32);
-            u1 = u1 & IMASK;
-
-            u1 += (w[1] & IMASK);
-
-            w[1] = (int)u1;
-            w[0] = (int)(u2 + (u1 >> 32) + w[0]);
-
-            return w;
         }
 
         /**
@@ -1057,14 +683,14 @@ namespace ChineseFountain
          */
         private int[] multiply(int[] x, int[] y, int[] z)
         {
-            for (int i = z.Length - 1; i >= 0; i--)
+            for (var i = z.Length - 1; i >= 0; i--)
             {
-                long a = z[i] & IMASK;
+                var a = z[i] & IntMask;
                 long value = 0;
 
-                for (int j = y.Length - 1; j >= 0; j--)
+                for (var j = y.Length - 1; j >= 0; j--)
                 {
-                    value += a * (y[j] & IMASK) + (x[i + j + 1] & IMASK);
+                    value += a * (y[j] & IntMask) + (x[i + j + 1] & IntMask);
 
                     x[i + j + 1] = (int)value;
 
@@ -1077,130 +703,41 @@ namespace ChineseFountain
             return x;
         }
 
-        /**
-         * Calculate mQuote = -m^(-1) mod b with b = 2^32 (32 = word size)
-         */
-        private long getMQuote()
+        public BigInteger Multiply(BigInteger val)
         {
-            if (mQuote != -1L)
-            { // allready calculated
-                return mQuote;
-            }
-            if ((magnitude[magnitude.Length - 1] & 1) == 0)
-            {
-                return -1L; // not for even numbers
-            }
+            if (_sign == 0 || val._sign == 0)
+                return Zero;
 
-            byte[] bytes = { 1, 0, 0, 0, 0 };
-            BigInteger b = new BigInteger(1, bytes); // 2^32
-            mQuote = this.negate().mod(b).modInverse(b).longValue();
-            return mQuote;
+            var res = new int[_magnitude.Length + val._magnitude.Length];
+
+            return new BigInteger(_sign * val._sign, multiply(res, _magnitude, val._magnitude));
         }
 
-        /**
-         * Montgomery multiplication: a = x * y * R^(-1) mod m
-         * <br>
-         * Based algorithm 14.36 of Handbook of Applied Cryptography.
-         * <br>
-         * <li> m, x, y should have length n </li>
-         * <li> a should have length (n + 1) </li>
-         * <li> b = 2^32, R = b^n </li>
-         * <br>
-         * The result is put in x
-         * <br>
-         * NOTE: the indices of x, y, m, a different in HAC and in Java
-         */
-        public void multiplyMonty(int[] a, int[] x, int[] y, int[] m, long mQuote)
-        // mQuote = -m^(-1) mod b
+        private BigInteger Negate()
         {
-            int n = m.Length;
-            int nMinus1 = n - 1;
-            long y_0 = y[n - 1] & IMASK;
-
-            // 1. a = 0 (Notation: a = (a_{n} a_{n-1} ... a_{0})_{b} )
-            for (int i = 0; i <= n; i++)
-            {
-                a[i] = 0;
-            }
-
-            // 2. for i from 0 to (n - 1) do the following:
-            for (int i = n; i > 0; i--)
-            {
-
-                long x_i = x[i - 1] & IMASK;
-
-                // 2.1 u = ((a[0] + (x[i] * y[0]) * mQuote) mod b
-                long u = ((((a[n] & IMASK) + ((x_i * y_0) & IMASK)) & IMASK) * mQuote) & IMASK;
-
-                // 2.2 a = (a + x_i * y + u * m) / b
-                long prod1 = x_i * y_0;
-                long prod2 = u * (m[n - 1] & IMASK);
-                long tmp = (a[n] & IMASK) + (prod1 & IMASK) + (prod2 & IMASK);
-                long carry = (long)((ulong)prod1 >> 32) + (long)((ulong)prod2 >> 32) + (long)((ulong)tmp >> 32);
-                for (int j = nMinus1; j > 0; j--)
-                {
-                    prod1 = x_i * (y[j - 1] & IMASK);
-                    prod2 = u * (m[j - 1] & IMASK);
-                    tmp = (a[j] & IMASK) + (prod1 & IMASK) + (prod2 & IMASK) + (carry & IMASK);
-                    carry = (long)((ulong)carry >> 32) + (long)((ulong)prod1 >> 32) +
-                        (long)((ulong)prod2 >> 32) + (long)((ulong)tmp >> 32);
-                    a[j + 1] = (int)tmp; // division by b
-                }
-                carry += (a[0] & IMASK);
-                a[1] = (int)carry;
-                a[0] = (int)((ulong)carry >> 32); // OJO!!!!!
-            }
-
-            // 3. if x >= m the x = x - m
-            if (compareTo(0, a, 0, m) >= 0)
-            {
-                subtract(0, a, 0, m);
-            }
-
-            // put the result in x
-            for (int i = 0; i < n; i++)
-            {
-                x[i] = a[i + 1];
-            }
+            return new BigInteger(-_sign, _magnitude);
         }
 
-        public BigInteger multiply(BigInteger val)
-        {
-            if (sign == 0 || val.sign == 0)
-                return BigInteger.ZERO;
-
-            int[] res = new int[magnitude.Length + val.magnitude.Length];
-
-            return new BigInteger(sign * val.sign, multiply(res, magnitude, val.magnitude));
-        }
-
-        public BigInteger negate()
-        {
-            return new BigInteger(-sign, magnitude);
-        }
-
-        public BigInteger pow(int exp) //throws ArithmeticException
+        public BigInteger Pow(int exp) //throws ArithmeticException
         {
             if (exp < 0)
                 throw new ArithmeticException("Negative exponent");
-            if (sign == 0)
-                return (exp == 0 ? BigInteger.ONE : this);
+            if (_sign == 0)
+                return exp == 0 ? _one : this;
 
-            BigInteger y,
-            z;
-            y = BigInteger.ONE;
-            z = this;
+            var y = _one;
+            var z = this;
 
             while (exp != 0)
             {
                 if ((exp & 0x1) == 1)
                 {
-                    y = y.multiply(z);
+                    y = y.Multiply(z);
                 }
                 exp >>= 1;
                 if (exp != 0)
                 {
-                    z = z.multiply(z);
+                    z = z.Multiply(z);
                 }
             }
 
@@ -1210,14 +747,22 @@ namespace ChineseFountain
         /**
          * return x = x % y - done in place (y value preserved)
          */
-        private int[] remainder(int[] x, int[] y)
+        private int[] Remainder(int[] x, int[] y)
         {
-            int xyCmp = compareTo(0, x, 0, y);
+            var xyCmp = CompareTo(0, x, 0, y);
 
-            if (xyCmp > 0)
+            if (xyCmp <= 0)
+            {
+                if (xyCmp != 0) return x;
+                for (var i = 0; i != x.Length; i++)
+                {
+                    x[i] = 0;
+                }
+            }
+            else
             {
                 int[] c;
-                int shift = bitLength(0, x) - bitLength(0, y);
+                var shift = BitLength(0, x) - BitLength(0, y);
 
                 if (shift > 1)
                 {
@@ -1230,22 +775,22 @@ namespace ChineseFountain
                     Array.Copy(y, 0, c, c.Length - y.Length, y.Length);
                 }
 
-                subtract(0, x, 0, c);
+                Subtract(0, x, 0, c);
 
-                int xStart = 0;
-                int cStart = 0;
+                var xStart = 0;
+                var cStart = 0;
 
-                for (; ; )
+                for (;;)
                 {
-                    int cmp = compareTo(xStart, x, cStart, c);
+                    var cmp = CompareTo(xStart, x, cStart, c);
 
                     while (cmp >= 0)
                     {
-                        subtract(xStart, x, cStart, c);
-                        cmp = compareTo(xStart, x, cStart, c);
+                        Subtract(xStart, x, cStart, c);
+                        cmp = CompareTo(xStart, x, cStart, c);
                     }
 
-                    xyCmp = compareTo(xStart, x, 0, y);
+                    xyCmp = CompareTo(xStart, x, 0, y);
 
                     if (xyCmp > 0)
                     {
@@ -1254,16 +799,9 @@ namespace ChineseFountain
                             xStart++;
                         }
 
-                        shift = bitLength(cStart, c) - bitLength(xStart, x);
+                        shift = BitLength(cStart, c) - BitLength(xStart, x);
 
-                        if (shift == 0)
-                        {
-                            c = shiftRightOne(cStart, c);
-                        }
-                        else
-                        {
-                            c = shiftRight(cStart, c, shift);
-                        }
+                        c = shift == 0 ? shiftRightOne(cStart, c) : shiftRight(cStart, c, shift);
 
                         if (c[cStart] == 0)
                         {
@@ -1272,10 +810,11 @@ namespace ChineseFountain
                     }
                     else if (xyCmp == 0)
                     {
-                        for (int i = xStart; i != x.Length; i++)
+                        for (var i = xStart; i != x.Length; i++)
                         {
                             x[i] = 0;
                         }
+
                         break;
                     }
                     else
@@ -1284,34 +823,27 @@ namespace ChineseFountain
                     }
                 }
             }
-            else if (xyCmp == 0)
-            {
-                for (int i = 0; i != x.Length; i++)
-                {
-                    x[i] = 0;
-                }
-            }
 
             return x;
         }
 
-        public BigInteger remainder(BigInteger val) //throws ArithmeticException
+        private BigInteger Remainder(BigInteger val) //throws ArithmeticException
         {
-            if (val.sign == 0)
+            if (val._sign == 0)
             {
                 throw new ArithmeticException("BigInteger: Divide by zero");
             }
 
-            if (sign == 0)
+            if (_sign == 0)
             {
-                return BigInteger.ZERO;
+                return Zero;
             }
 
-            int[] res = new int[this.magnitude.Length];
+            var res = new int[_magnitude.Length];
 
-            Array.Copy(this.magnitude, 0, res, 0, res.Length);
+            Array.Copy(_magnitude, 0, res, 0, res.Length);
 
-            return new BigInteger(sign, remainder(res, val.magnitude));
+            return new BigInteger(_sign, Remainder(res, val._magnitude));
         }
 
         /**
@@ -1319,24 +851,24 @@ namespace ChineseFountain
          */
         private int[] shiftLeft(int[] mag, int n)
         {
-            int nInts = (int)((uint)n >> 5);
-            int nBits = n & 0x1f;
-            int magLen = mag.Length;
-            int[] newMag = null;
+            var nInts = (int)((uint)n >> 5);
+            var nBits = n & 0x1f;
+            var magLen = mag.Length;
+            int[] newMag;
 
             if (nBits == 0)
             {
                 newMag = new int[magLen + nInts];
-                for (int i = 0; i < magLen; i++)
+                for (var i = 0; i < magLen; i++)
                 {
                     newMag[i] = mag[i];
                 }
             }
             else
             {
-                int i = 0;
-                int nBits2 = 32 - nBits;
-                int highBits = (int)((uint)mag[0] >> nBits2);
+                var i = 0;
+                var nBits2 = 32 - nBits;
+                var highBits = (int)((uint)mag[0] >> nBits2);
 
                 if (highBits != 0)
                 {
@@ -1348,10 +880,10 @@ namespace ChineseFountain
                     newMag = new int[magLen + nInts];
                 }
 
-                int m = mag[0];
-                for (int j = 0; j < magLen - 1; j++)
+                var m = mag[0];
+                for (var j = 0; j < magLen - 1; j++)
                 {
-                    int next = mag[j + 1];
+                    var next = mag[j + 1];
 
                     newMag[i++] = (m << nBits) | (int)((uint)next >> nBits2);
                     m = next;
@@ -1363,23 +895,14 @@ namespace ChineseFountain
             return newMag;
         }
 
-        public BigInteger shiftLeft(int n)
+        private BigInteger ShiftLeft(int n)
         {
-            if (sign == 0 || magnitude.Length == 0)
-            {
-                return ZERO;
-            }
-            if (n == 0)
-            {
-                return this;
-            }
+            if (_sign == 0 || _magnitude.Length == 0) return Zero;
+            
+            if (n == 0) return this;
+            if (n < 0) return ShiftRight(-n);
 
-            if (n < 0)
-            {
-                return shiftRight(-n);
-            }
-
-            return new BigInteger(sign, shiftLeft(magnitude, n));
+            return new BigInteger(_sign, shiftLeft(_magnitude, n));
         }
 
         /**
@@ -1387,19 +910,19 @@ namespace ChineseFountain
          */
         private int[] shiftRight(int start, int[] mag, int n)
         {
-            int nInts = (int)((uint)n >> 5) + start;
-            int nBits = n & 0x1f;
-            int magLen = mag.Length;
+            var nInts = (int)((uint)n >> 5) + start;
+            var nBits = n & 0x1f;
+            var magLen = mag.Length;
 
             if (nInts != start)
             {
-                int delta = (nInts - start);
+                var delta = nInts - start;
 
-                for (int i = magLen - 1; i >= nInts; i--)
+                for (var i = magLen - 1; i >= nInts; i--)
                 {
                     mag[i] = mag[i - delta];
                 }
-                for (int i = nInts - 1; i >= start; i--)
+                for (var i = nInts - 1; i >= start; i--)
                 {
                     mag[i] = 0;
                 }
@@ -1407,12 +930,12 @@ namespace ChineseFountain
 
             if (nBits != 0)
             {
-                int nBits2 = 32 - nBits;
-                int m = mag[magLen - 1];
+                var nBits2 = 32 - nBits;
+                var m = mag[magLen - 1];
 
-                for (int i = magLen - 1; i >= nInts + 1; i--)
+                for (var i = magLen - 1; i >= nInts + 1; i--)
                 {
-                    int next = mag[i - 1];
+                    var next = mag[i - 1];
 
                     mag[i] = (int)((uint)m >> nBits) | (next << nBits2);
                     m = next;
@@ -1429,15 +952,15 @@ namespace ChineseFountain
          */
         private int[] shiftRightOne(int start, int[] mag)
         {
-            int magLen = mag.Length;
+            var magLen = mag.Length;
 
-            int m = mag[magLen - 1];
+            var m = mag[magLen - 1];
 
-            for (int i = magLen - 1; i >= start + 1; i--)
+            for (var i = magLen - 1; i >= start + 1; i--)
             {
-                int next = mag[i - 1];
+                var next = mag[i - 1];
 
-                mag[i] = ((int)((uint)m >> 1)) | (next << 31);
+                mag[i] = (int)((uint)m >> 1) | (next << 31);
                 m = next;
             }
 
@@ -1446,48 +969,37 @@ namespace ChineseFountain
             return mag;
         }
 
-        public BigInteger shiftRight(int n)
+        private BigInteger ShiftRight(int n)
         {
-            if (n == 0)
+            if (n == 0) return this;
+
+            if (n < 0) return ShiftLeft(-n);
+
+            if (n >= BitLength())
             {
-                return this;
+                return _sign < 0 ? ValueOf(-1) : Zero;
             }
 
-            if (n < 0)
-            {
-                return shiftLeft(-n);
-            }
+            var res = new int[_magnitude.Length];
 
-            if (n >= bitLength())
-            {
-                return (this.sign < 0 ? valueOf(-1) : BigInteger.ZERO);
-            }
+            Array.Copy(_magnitude, 0, res, 0, res.Length);
 
-            int[] res = new int[this.magnitude.Length];
-
-            Array.Copy(this.magnitude, 0, res, 0, res.Length);
-
-            return new BigInteger(this.sign, shiftRight(0, res, n));
-        }
-
-        public int signum()
-        {
-            return sign;
+            return new BigInteger(_sign, shiftRight(0, res, n));
         }
 
         /**
          * returns x = x - y - we assume x is >= y
          */
-        private int[] subtract(int xStart, int[] x, int yStart, int[] y)
+        private static int[] Subtract(int xStart, int[] x, int yStart, int[] y)
         {
-            int iT = x.Length - 1;
-            int iV = y.Length - 1;
+            var iT = x.Length - 1;
+            var iV = y.Length - 1;
             long m;
-            int borrow = 0;
+            var borrow = 0;
 
             do
             {
-                m = (((long)x[iT]) & IMASK) - (((long)y[iV--]) & IMASK) + borrow;
+                m = (x[iT] & IntMask) - (y[iV--] & IntMask) + borrow;
 
                 x[iT--] = (int)m;
 
@@ -1503,7 +1015,7 @@ namespace ChineseFountain
 
             while (iT >= xStart)
             {
-                m = (((long)x[iT]) & IMASK) + borrow;
+                m = (x[iT] & IntMask) + borrow;
                 x[iT--] = (int)m;
 
                 if (m < 0)
@@ -1519,63 +1031,60 @@ namespace ChineseFountain
             return x;
         }
 
-        public BigInteger subtract(BigInteger val)
+        public BigInteger Subtract(BigInteger val)
         {
-            if (val.sign == 0 || val.magnitude.Length == 0)
+            if (val._sign == 0 || val._magnitude.Length == 0)
             {
                 return this;
             }
-            if (sign == 0 || magnitude.Length == 0)
+            if (_sign == 0 || _magnitude.Length == 0)
             {
-                return val.negate();
+                return val.Negate();
             }
-            if (val.sign < 0)
+            if (val._sign < 0)
             {
-                if (this.sign > 0)
-                    return this.add(val.negate());
-            }
-            else
-            {
-                if (this.sign < 0)
-                    return this.add(val.negate());
-            }
-
-            BigInteger bigun,
-            littlun;
-            int compare = compareTo(val);
-            if (compare == 0)
-            {
-                return ZERO;
-            }
-
-            if (compare < 0)
-            {
-                bigun = val;
-                littlun = this;
+                if (_sign > 0)
+                    return Add(val.Negate());
             }
             else
             {
-                bigun = this;
-                littlun = val;
+                if (_sign < 0)
+                    return Add(val.Negate());
             }
 
-            int[] res = new int[bigun.magnitude.Length];
+            BigInteger bigOne, littleOne;
+            var compare = CompareTo(val);
+            switch (compare)
+            {
+                case 0:
+                    return Zero;
+                case < 0:
+                    bigOne = val;
+                    littleOne = this;
+                    break;
+                default:
+                    bigOne = this;
+                    littleOne = val;
+                    break;
+            }
 
-            Array.Copy(bigun.magnitude, 0, res, 0, res.Length);
+            var res = new int[bigOne._magnitude.Length];
 
-            return new BigInteger(this.sign * compare, subtract(0, res, 0, littlun.magnitude));
+            Array.Copy(bigOne._magnitude, 0, res, 0, res.Length);
+
+            return new BigInteger(_sign * compare, Subtract(0, res, 0, littleOne._magnitude));
         }
         
         
-        public byte[] magnitudeBytes()
+        public byte[] MagnitudeBytes()
         {
-            if (magnitude.Length < 1) return Array.Empty<byte>();
+            if (_magnitude.Length < 1) return Array.Empty<byte>();
 
             // 'fast' path for encoding (will always be 2 bytes or less)
-            if (magnitude.Length == 1)
+            if (_magnitude.Length == 1)
             {
-                var m = magnitude[0];
-                if (m < (1 << 16))
+                var m = _magnitude[0];
+                if (m < 1 << 16)
                 {
                     var result = new byte[2];
                     result[0] = (byte)((m >> 8) & 0xff);
@@ -1588,13 +1097,13 @@ namespace ChineseFountain
             // normal path
             var accum = new List<byte>();
             
-            bool hit = false; // have we got to the most significant non-zero byte?
+            var hit = false; // have we got to the most significant non-zero byte?
 
             // Go through all bytes in the magnitude data
-            for (int i = 0; i < magnitude.Length; i++)
+            for (var i = 0; i < _magnitude.Length; i++)
             {
-                var mx = magnitude[i];
-                for (int j = 24; j >= 0; j-=8)
+                var mx = _magnitude[i];
+                for (var j = 24; j >= 0; j-=8)
                 {
                     var b = (mx >> j) & 0xff;
                     if (b == 0 && !hit) continue;
@@ -1607,59 +1116,14 @@ namespace ChineseFountain
             return accum.ToArray();
         }
 
-        public byte[] toByteArray()
-        {
-            int bitLength = this.bitLength();
-            byte[] bytes = new byte[bitLength / 8 + 1];
-
-            int bytesCopied = 4;
-            int mag = 0;
-            int ofs = magnitude.Length - 1;
-            int carry = 1;
-            long lMag;
-            for (int i = bytes.Length - 1; i >= 0; i--)
-            {
-                if (bytesCopied == 4 && ofs >= 0)
-                {
-                    if (sign < 0)
-                    {
-                        // we are dealing with a +ve number and we want a -ve one, so
-                        // invert the magnitude ints and add 1 (propagating the carry)
-                        // to make a 2's complement -ve number
-                        lMag = ~magnitude[ofs--] & IMASK;
-                        lMag += carry;
-                        if ((lMag & ~IMASK) != 0)
-                            carry = 1;
-                        else
-                            carry = 0;
-                        mag = (int)(lMag & IMASK);
-                    }
-                    else
-                    {
-                        mag = magnitude[ofs--];
-                    }
-                    bytesCopied = 1;
-                }
-                else
-                {
-                    mag = (int)((uint)mag >> 8);
-                    bytesCopied++;
-                }
-
-                bytes[i] = (byte)mag;
-            }
-
-            return bytes;
-        }
-
-        public override String ToString()
+        public override string ToString()
         {
             return ToString(10);
         }
 
-        public String ToString(int rdx)
+        private string ToString(int rdx)
         {
-            String format;
+            string format;
             switch (rdx)
             {
                 case 10:
@@ -1672,56 +1136,48 @@ namespace ChineseFountain
                     throw new FormatException("Only base 10 or 16 are allowed");
             }
 
-            if (magnitude == null)
-            {
-                return "null";
-            }
-            else if (sign == 0)
+            if (_sign == 0)
             {
                 return "0";
             }
 
-            String s = "";
-            String h;
+            var s = "";
 
             if (rdx == 16)
             {
-                for (int i = 0; i < magnitude.Length; i++)
+                for (var i = 0; i < _magnitude.Length; i++)
                 {
-                    h = "0000000" + magnitude[i].ToString("x");
+                    var h = "0000000" + _magnitude[i].ToString("x");
                     h = h.Substring(h.Length - 8);
-                    s = s + h;
+                    s += h;
                 }
             }
             else
             {
-                // This is algorithm 1a from chapter 4.4 in Seminumerical Algorithms, slow but it works
-                Stack S = new Stack();
-                BigInteger bs = new BigInteger(rdx.ToString());
-                // The sign is handled separatly.
+                // This is algorithm 1a from chapter 4.4 in Semi-numerical Algorithms, slow but it works
+                var stack = new Stack();
+                var bs = new BigInteger(rdx.ToString());
+                // The sign is handled separately.
                 // Notice however that for this to work, radix 16 _MUST_ be a special case,
-                // unless we want to enter a recursion well. In their infinite wisdom, why did not 
-                // the Sun engineers made a c'tor for BigIntegers taking a BigInteger as parameter?
-                // (Answer: Becuase Sun's BigIntger is clonable, something bouncycastle's isn't.)
-                BigInteger u = new BigInteger(this.abs().ToString(16), 16);
-                BigInteger b;
+                // unless we want to enter a recursion well.
+                var u = new BigInteger(Abs());
 
                 // For speed, maye these test should look directly a u.magnitude.Length?
-                while (!u.Equals(BigInteger.ZERO))
+                while (!u.Equals(Zero))
                 {
-                    b = u.mod(bs);
-                    if (b.Equals(BigInteger.ZERO))
-                        S.Push("0");
+                    var b = u.Mod(bs);
+                    if (b.Equals(Zero))
+                        stack.Push("0");
                     else
                     {
                         // see how to interact with different bases
-                        S.Push(b.magnitude[0].ToString(format));
+                        stack.Push(b._magnitude[0].ToString(format));
                     }
-                    u = u.divide(bs);
+                    u = u.Divide(bs);
                 }
                 // Then pop the stack
-                while (S.Count != 0)
-                    s = s + S.Pop();
+                while (stack.Count != 0)
+                    s = s + stack.Pop();
             }
             // Strip leading zeros.
             while (s.Length > 1 && s[0] == '0')
@@ -1729,26 +1185,22 @@ namespace ChineseFountain
 
             if (s.Length == 0)
                 s = "0";
-            else if (sign == -1)
+            else if (_sign == -1)
                 s = "-" + s;
 
             return s;
         }
 
-        public static readonly BigInteger ZERO = new BigInteger(0, new byte[0]);
-        public static readonly BigInteger ONE = valueOf(1);
-        private static readonly BigInteger TWO = valueOf(2);
+        public static readonly BigInteger Zero = new(0, Array.Empty<byte>());
+        private static readonly BigInteger _one = ValueOf(1);
 
-        public static BigInteger valueOf(long val)
+        public static BigInteger ValueOf(long val)
         {
-            if (val == 0)
-            {
-                return BigInteger.ZERO;
-            }
+            if (val == 0) { return Zero; }
 
             // store val into a byte array
-            byte[] b = new byte[8];
-            for (int i = 0; i < 8; i++)
+            var b = new byte[8];
+            for (var i = 0; i < 8; i++)
             {
                 b[7 - i] = (byte)val;
                 val >>= 8;
@@ -1757,60 +1209,5 @@ namespace ChineseFountain
             return new BigInteger(b);
         }
 
-        private int max(int a, int b)
-        {
-            if (a < b)
-                return b;
-            return a;
-        }
-
-        public int getLowestSetBit()
-        {
-            if (this.Equals(ZERO))
-            {
-                return -1;
-            }
-
-            int w = magnitude.Length - 1;
-
-            while (w >= 0)
-            {
-                if (magnitude[w] != 0)
-                {
-                    break;
-                }
-
-                w--;
-            }
-
-            int b = 31;
-
-            while (b > 0)
-            {
-                if ((uint)(magnitude[w] << b) == 0x80000000)
-                {
-                    break;
-                }
-
-                b--;
-            }
-
-            return (((magnitude.Length - 1) - w) * 32 + (31 - b));
-        }
-
-        public bool testBit(int n) //throws ArithmeticException
-        {
-            if (n < 0)
-            {
-                throw new ArithmeticException("Bit position must not be negative");
-            }
-
-            if ((n / 32) >= magnitude.Length)
-            {
-                return sign < 0;
-            }
-
-            return ((magnitude[(magnitude.Length - 1) - n / 32] >> (n % 32)) & 1) > 0;
-        }
     }
 }

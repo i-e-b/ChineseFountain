@@ -12,13 +12,13 @@ public static class CoPrimes
         var cop = _coPrimes16[^1];
         while (num >= _coPrimes16.Count) {
             
-            cop = cop.sub(1);
+            cop = cop.Sub(1);
             if (cop == _1) throw new Exception("no more co-primes");
             
             var failed = false;
             for (var i = 0; i < _coPrimes16.Count; i++) {
                 var c = _coPrimes16[i];
-                if (c.gcd(cop) != _1) {
+                if (c.Gcd(cop) != _1) {
                     failed = true;
                     break;
                 }
@@ -34,7 +34,7 @@ public static class CoPrimes
     private static BaseAndCoefficients CalculateCoefficients(List<Big> subsetCops) {
         var baseCoefficient = _1;
         for (var i = 0; i < subsetCops.Count; i++) {
-            baseCoefficient = baseCoefficient.mul(subsetCops[i]);
+            baseCoefficient = baseCoefficient.Mul(subsetCops[i]);
         }
 
         var numCops = subsetCops.Count;
@@ -42,7 +42,7 @@ public static class CoPrimes
         var preMultCoefficients = new Big[numCops];
 
         Big MultiplyBase(Big a, Big b) {
-            var ret = a.mul(b).mod(baseCoefficient); // a*b % _base
+            var ret = a.Mul(b).Mod(baseCoefficient); // a*b % _base
             return ret;
         }
 
@@ -52,12 +52,12 @@ public static class CoPrimes
                 if (j == i) continue;
                 prod = MultiplyBase(prod, subsetCops[j]);
             }
-            var prodModCop = prod.mod(subsetCops[i]);
+            var prodModCop = prod.Mod(subsetCops[i]);
             
             
-            var k = prodModCop.invertm(subsetCops[i]);
+            var k = prodModCop.ModInverse(subsetCops[i]);
             coefficients[i] = k;
-            preMultCoefficients[i] = k.mul(prod);
+            preMultCoefficients[i] = k.Mul(prod);
         }
 
         return new BaseAndCoefficients (preMultCoefficients, baseCoefficient);
@@ -74,10 +74,10 @@ public static class CoPrimes
         var numOut = new Big(0);
 
         for (var i=0; i < subsetCops.Count; i++) {
-            var tmp = coefficients[i].mul(parts[i]);
-            var tmp2 = numOut.add(tmp);
-            numOut = tmp2.mod(baseCoefficient);
-            ret = ret.add(coefficients[i].mul(parts[i])).mod(baseCoefficient);
+            var tmp = coefficients[i].Mul(parts[i]);
+            var tmp2 = numOut.Add(tmp);
+            numOut = tmp2.Mod(baseCoefficient);
+            ret = ret.Add(coefficients[i].Mul(parts[i])).Mod(baseCoefficient);
         }
 
         return ret;

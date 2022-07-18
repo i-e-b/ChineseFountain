@@ -17,9 +17,8 @@ public class BasicTests
         var subject = new Fountain(randomData, 64);
 
         for (int i = 0; i < 900; i++) // 900*64 -- generating 57600 bytes of transmit from 3072 bytes of source
-        {
-            var str = Convert.ToBase64String(subject.Generate(i));
-            //Console.WriteLine(str);
+        { 
+            _ = subject.Generate(i);
         }
         
         Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits ({Big.MaxSize / 8} bytes)");

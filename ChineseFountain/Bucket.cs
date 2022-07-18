@@ -49,11 +49,11 @@ public class Bucket: ChineseBase
         // do the cops multiply to more than the min_bundles value
         var prod = new Big(1);
         foreach (var bundleNum in _bundles.Keys) {
-            prod = prod.mul(CoPrimes.CoPrime16(bundleNum));
+            prod = prod.Mul(CoPrimes.CoPrime16(bundleNum));
         }
         
-        var t1 = Big.pow(65536, (uint)_minBundles);
-        var t2 = prod.gt(t1);
+        var t1 = Big.Pow(65536, (uint)_minBundles);
+        var t2 = prod.GT(t1);
         return t2; //prod.gt(mpz(65536).pow(mpz(this.num_hunks)));
     }
     

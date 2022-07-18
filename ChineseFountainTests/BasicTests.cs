@@ -1,4 +1,4 @@
-﻿using ChineseFountain;
+﻿using ChineseFountain.core;
 using NUnit.Framework;
 
 namespace ChineseFountainTests;

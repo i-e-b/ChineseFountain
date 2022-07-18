@@ -1,4 +1,4 @@
-﻿namespace ChineseFountain;
+﻿namespace ChineseFountain.core;
 
 /// <summary>
 /// Data sink for the Fountain.
@@ -21,13 +21,13 @@ public class Bucket: ChineseBase
         _length = length;
         _bundleSize = bundleSize;
         var bundleShorts = _bundleSize / SizeOfShort;
-        Assert(bundleShorts * SizeOfShort == bundleSize); // throw if odd bundle_size
+        Assert(bundleShorts * SizeOfShort == bundleSize, ()=>"bundle size is odd"); // throw if odd bundle_size
         _paddedLength = div_round_up(_length, _bundleSize) * _bundleSize;
         _sliceSize = SizeOfShort;
         _minBundles = _paddedLength / _bundleSize;
         _hunkSize = _minBundles * _sliceSize;
         _numHunks = 0 | (_paddedLength / _hunkSize);
-        Assert(_numHunks == _paddedLength / _hunkSize);
+        Assert(_numHunks == _paddedLength / _hunkSize, ()=>"hunk size does not match hunk count");
 
         _bundles = new ByteMap();
     }
@@ -38,7 +38,7 @@ public class Bucket: ChineseBase
     /// <param name="bundleNum">the bundle index</param>
     /// <param name="bundleData">data we received</param>
     public void Push(int bundleNum, byte[] bundleData) {
-        Assert(bundleData.Length == _bundleSize);
+        Assert(bundleData.Length == _bundleSize, ()=>$"bundle data size {bundleData.Length} does not match expected bundle size {_bundleSize}");
         _bundles[bundleNum] = bundleData;
     }
     
@@ -81,12 +81,12 @@ public class Bucket: ChineseBase
                 
                 hunks.Add(padding);
                 hunks.Add(hunk);
-                Assert(hunk.Length + padding.Length == _hunkSize);
+                Assert(hunk.Length + padding.Length == _hunkSize, ()=>"Unexpected hunk size after padding");
             } else if (hunk.Length > _hunkSize) {
                 bigIntHunk = CoPrimes.Combine(RemoveLast(parts), RemoveLast(subsetCops));
                 hunk = bigIntHunk.ToBuffer();
 
-                Assert(hunk.Length == _hunkSize);
+                Assert(hunk.Length == _hunkSize, ()=>"Unexpected hunk size after combining");
                 hunks.Add(hunk);
             } else {
                 hunks.Add(hunk);
@@ -94,7 +94,7 @@ public class Bucket: ChineseBase
         }
         
         var fullLength = WholeSize(hunks);
-        Assert(fullLength == _paddedLength);
+        Assert(fullLength == _paddedLength, ()=>"Recovered length did not match declared length");
         return RepackToArray(hunks, _length);
     }
 

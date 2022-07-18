@@ -1,4 +1,4 @@
-﻿namespace ChineseFountain;
+﻿namespace ChineseFountain.core;
 
 /// <summary>
 /// An out-of-order container for bytes

@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Globalization;
 
-namespace ChineseFountain
+namespace ChineseFountain.core
 {
     public class BigInteger
     {

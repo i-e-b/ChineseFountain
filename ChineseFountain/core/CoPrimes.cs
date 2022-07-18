@@ -1,4 +1,4 @@
-﻿namespace ChineseFountain;
+﻿namespace ChineseFountain.core;
 
 public static class CoPrimes
 {

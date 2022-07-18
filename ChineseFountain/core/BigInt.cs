@@ -1,4 +1,4 @@
-﻿namespace ChineseFountain;
+﻿namespace ChineseFountain.core;
 
 /// <summary>
 /// Helper wrapper for the BigInteger library

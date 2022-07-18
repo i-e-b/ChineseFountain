@@ -69,6 +69,7 @@ public class Big
         return _val.Multiply(y);
     }
 
+    // A huge amount of the recovery time is spent here
     public Big Mod(Big d)
     {
         return _val.Mod(d);

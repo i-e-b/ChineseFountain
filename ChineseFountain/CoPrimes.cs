@@ -30,7 +30,13 @@ public static class CoPrimes
         return _coPrimes16[num];
     }
 
-    // Returns a list of pre-multiplied coefficients and the base, when supplied with a list of cops.
+    /// <summary>
+    /// Returns a list of pre-multiplied coefficients and the base, when supplied with a list of cops.
+    /// </summary>
+    /// <remarks>
+    /// This seems to be the main bottleneck of the data recovery.
+    /// Most time is spent in `Mod`
+    /// </remarks>
     private static BaseAndCoefficients CalculateCoefficients(List<Big> subsetCops) {
         var baseCoefficient = _1;
         for (var i = 0; i < subsetCops.Count; i++) {
@@ -46,6 +52,7 @@ public static class CoPrimes
             return ret;
         }
 
+        // matrix solving
         for (var i = 0; i < numCops; i++) {
             var prod = _1;
             for (var j = 0; j < numCops; j++) {

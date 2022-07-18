@@ -17,12 +17,6 @@ namespace ChineseFountain
         {
         }
 
-        private BigInteger(int nWords)
-        {
-            sign = 1;
-            magnitude = new int[nWords];
-        }
-
         private BigInteger(int signum, int[] mag)
         {
             sign = signum;
@@ -1575,10 +1569,9 @@ namespace ChineseFountain
         
         public byte[] magnitudeBytes()
         {
-            // IEB: this is just for the 2-byte limit
             if (magnitude.Length < 1) return Array.Empty<byte>();
 
-            // 'fast' path for encoding
+            // 'fast' path for encoding (will always be 2 bytes or less)
             if (magnitude.Length == 1)
             {
                 var m = magnitude[0];
@@ -1595,8 +1588,9 @@ namespace ChineseFountain
             // normal path
             var accum = new List<byte>();
             
-            bool hit = false; //have we got to the most significant non-zero byte?
+            bool hit = false; // have we got to the most significant non-zero byte?
 
+            // Go through all bytes in the magnitude data
             for (int i = 0; i < magnitude.Length; i++)
             {
                 var mx = magnitude[i];

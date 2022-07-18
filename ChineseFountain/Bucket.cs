@@ -62,7 +62,6 @@ public class Bucket: ChineseBase
     /// </summary>
     /// <returns></returns>
     public byte[] RecoverData() {
-        //console.log('--------------------');
         var hunks = new List<byte[]>();
         var subsetCops = new List<Big>();
         foreach (var bundleNum in _bundles.Keys) {
@@ -80,8 +79,8 @@ public class Bucket: ChineseBase
             if (hunk.Length < _hunkSize) {
                 var padding = new byte[_hunkSize - hunk.Length];
                 
-                hunks.Add(hunk);
                 hunks.Add(padding);
+                hunks.Add(hunk);
                 Assert(hunk.Length + padding.Length == _hunkSize);
             } else if (hunk.Length > _hunkSize) {
                 bigIntHunk = CoPrimes.Combine(RemoveLast(parts), RemoveLast(subsetCops));

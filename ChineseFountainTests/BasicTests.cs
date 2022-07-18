@@ -10,7 +10,7 @@ public class BasicTests
     // Will need to wrap the algo in an outer packet with x-sum and position?
     
     [Test]
-    public void first_run()
+    public void generating_many_bundles()
     {
         Big.ResetSize();
         byte[] randomData = MakeData(4096);
@@ -22,7 +22,7 @@ public class BasicTests
             //Console.WriteLine(str);
         }
         
-        Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits");
+        Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits ({Big.MaxSize / 8} bytes)");
     }
     
     
@@ -122,7 +122,7 @@ public class BasicTests
         Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits");
     }
 
-    [Test, Ignore("Only one mb, but it fails")]
+    [Test, Explicit("should work, but it's slow")]
     public void recovering_data_large()
     {
         // Only one mb, but it fails
@@ -256,23 +256,24 @@ public class BasicTests
         Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits");
     }
     
-    [Test]
+    [Test] // Note: when this fails, we are always expecting a zero, but get a non-zero value.
     public void recovering_data_simple_loss_and_large_bundles()
     {
+        const int bundleSize = 256;
         Big.ResetSize();
         byte[] original = MakeData(4096);
-        var source = new Fountain(original, 256);
-        var target = new Bucket(original.Length, 256);
+        var source = new Fountain(original, bundleSize);
+        var target = new Bucket(original.Length, bundleSize);
 
         int i;
-        for (i = 0; i < 900; i++) // 900*64 -- generating 57600 bytes of transmit from 3072 bytes of source
+        for (i = 0; i < 900; i++)
         {
             if (target.IsComplete()) break;
             if (i % 5 == 0) continue;
             target.Push(i, source.Generate(i));
         }
         
-        var recSize = 256*(i-1);
+        var recSize = bundleSize*(i-1);
         Console.WriteLine($"Completed after {i} bundles: {recSize} bytes to transmit {original.Length}");
         
         Assert.That(target.IsComplete(), Is.True, "Target did not complete");
@@ -283,7 +284,7 @@ public class BasicTests
 
         for (i = 0; i < final.Length; i++)
         {
-            Assert.That(final[i], Is.EqualTo(original[i]), $"Data corrupt at index {i}");
+            Assert.That(final[i], Is.EqualTo(original[i]), $"Data corrupt at index {i} of {final.Length-1}; Original = {original[i]}");
         }
         
         Console.WriteLine($"Maximum 'big int' size: {Big.MaxSize} bits");

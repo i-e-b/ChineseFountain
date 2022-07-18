@@ -7,7 +7,7 @@ public class Fountain: ChineseBase
 {
     private readonly int _bundleSize;
     private readonly int _bundleShorts;
-    private readonly Big[] _mpzHunks;
+    private readonly Big[] _bigIntHunks;
 
     /// <summary>
     /// Create a new 'fountain' source for the given data to be transmitted
@@ -33,13 +33,13 @@ public class Fountain: ChineseBase
         var numHunks = 0 | (paddedLength / hunkSize);
         Assert(numHunks == paddedLength / hunkSize);
 
-        _mpzHunks = new Big[numHunks];
+        _bigIntHunks = new Big[numHunks];
         for (var i = 0; i < numHunks; i++) {
             //var hunk = this.padded_data.slice(i * this.hunk_size, (i+1) * this.hunk_size); // inclusive lower bound, exclusive upper bound
             var hunk = paddedData.Skip(i * hunkSize).Take(hunkSize).ToArray(); // inclusive lower bound, exclusive upper bound
             
             Assert(hunkSize == hunk.Length);
-            _mpzHunks[i] = Big.FromBuffer(hunk);
+            _bigIntHunks[i] = Big.FromBuffer(hunk);
         }
     }
     
@@ -53,9 +53,9 @@ public class Fountain: ChineseBase
     public byte[] Generate(int bundleNum) {
         var buffer = new byte[_bundleSize];
         for (var i = 0; i < _bundleShorts; i++) {
-            var mpzHunk = _mpzHunks[i];
+            var bigIntHunk = _bigIntHunks[i];
             
-            var part = mpzHunk.mod(CoPrimes.CoPrime16(bundleNum));
+            var part = bigIntHunk.mod(CoPrimes.CoPrime16(bundleNum));
             
             var partBuf = part.ToBuffer();
             

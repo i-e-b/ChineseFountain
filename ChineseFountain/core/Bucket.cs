@@ -85,7 +85,7 @@ public class Bucket: ChineseBase
                 
                 pos = Add(hunks, pos, padding);
                 pos = Add(hunks, pos, hunk);
-                Assert(hunk.Length + padding.Length == _hunkSize, ()=>"Unexpected hunk size after padding");
+                Assert(hunk.Length + padding.Length == _hunkSize, () => "Unexpected hunk size after padding");
             } else if (hunk.Length > _hunkSize) {
                 bigIntHunk = CoPrimes.Combine(parts, subsetCops, subsetCops.Count - 1); // combine, ignoring last element
                 hunk = bigIntHunk.ToBuffer();

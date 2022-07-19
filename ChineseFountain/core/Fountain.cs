@@ -25,9 +25,8 @@ public class Fountain: ChineseBase
         
         var paddedData = data.Concat(padding).ToArray();
 
-        // TODO: handle data whose size is not divisible by BUNDLE_SHORTS
         var minBundles = paddedLength / _bundleSize;
-        if (minBundles > 100) throw new Exception($"data too long, would require more than {minBundles} bundles");
+        if (minBundles > 100) throw new Exception($"data too long, would require {minBundles} bundles of a maximum 100.");
 
         var hunkSize = minBundles * SizeOfShort;
         var numHunks = 0 | (paddedLength / hunkSize);
@@ -35,7 +34,6 @@ public class Fountain: ChineseBase
 
         _bigIntHunks = new Big[numHunks];
         for (var i = 0; i < numHunks; i++) {
-            //var hunk = this.padded_data.slice(i * this.hunk_size, (i+1) * this.hunk_size); // inclusive lower bound, exclusive upper bound
             var hunk = paddedData.Skip(i * hunkSize).Take(hunkSize).ToArray(); // inclusive lower bound, exclusive upper bound
             
             Assert(hunkSize == hunk.Length, ()=>$"Hunk size {hunk.Length} does not match expected {hunkSize}");

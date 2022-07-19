@@ -72,6 +72,7 @@ public class Big
     // A huge amount of the recovery time is spent here
     public Big Mod(Big d)
     {
+        if (d._val.CompareTo(_val) >= 0) return this; // sub modulus
         return _val.Mod(d);
     }
 

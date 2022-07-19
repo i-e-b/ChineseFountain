@@ -7,9 +7,6 @@ namespace ChineseFountainTests;
 [TestFixture]
 public class BasicTests
 {
-    // TODO: out of order; wrong sequence number; corrupted.
-    // Will need to wrap the algo in an outer packet with x-sum and position?
-    
     [Test]
     public void generating_many_bundles()
     {

@@ -113,7 +113,7 @@ namespace ChineseFountain.core
                 default:
                     // copy bytes
                     _magnitude = MakeMagnitude(mag);
-                    this._sign = sign;
+                    _sign = sign;
                     break;
             }
         }
@@ -512,35 +512,24 @@ namespace ChineseFountain.core
             return _magnitude.GetHashCode();
         }
 
-        public BigInteger Mod(BigInteger m) //throws ArithmeticException
+        public BigInteger Mod(BigInteger m)
         {
-            if (m._sign <= 0)
-            {
-                throw new ArithmeticException("BigInteger: modulus is not positive");
-            }
-
             var biggie = Remainder(m);
-
             return biggie._sign >= 0 ? biggie : biggie.Add(m);
         }
 
         public BigInteger ModInverse(BigInteger m) //throws ArithmeticException
         {
-            if (m._sign != 1)
-            {
-                throw new ArithmeticException("Modulus must be positive");
-            }
-
             var x = new BigInteger();
             var y = new BigInteger();
-
+            
             var gcd = ExtEuclid(this, m, x, y);
 
             if (!gcd.Equals(_one))
             {
                 throw new ArithmeticException("Numbers not relatively prime.");
             }
-
+            
             if (x.CompareTo(Zero) < 0)
             {
                 x = x.Add(m);

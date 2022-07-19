@@ -33,10 +33,6 @@ public static class CoPrimes
     /// <summary>
     /// Returns a list of pre-multiplied coefficients and the base, when supplied with a list of cops.
     /// </summary>
-    /// <remarks>
-    /// This seems to be the main bottleneck of the data recovery.
-    /// Most time is spent in `Mod`
-    /// </remarks>
     public static BaseAndCoefficients CalculateCoefficients(List<Big> subsetCops) {
         var baseCoefficient = _1;
         for (var i = 0; i < subsetCops.Count; i++) {
@@ -84,12 +80,8 @@ public static class CoPrimes
 
         if (parts.Count < limit || subsetCops.Count < limit) { throw new Exception("incorrect number of parts"); }
         var ret = new Big(0);
-        var numOut = new Big(0);
 
-        for (var i=0; i < limit; i++) {
-            var tmp = coefficients[i].Mul(parts[i]);
-            var tmp2 = numOut.Add(tmp);
-            numOut = tmp2.Mod(baseCoefficient);
+        for (var i = 0; i < limit; i++) {
             ret = ret.Add(coefficients[i].Mul(parts[i])).Mod(baseCoefficient);
         }
 
@@ -102,12 +94,8 @@ public static class CoPrimes
 
         if (parts.Count != subsetCopsCount) { throw new Exception("incorrect number of parts"); }
         var ret = new Big(0);
-        var numOut = new Big(0);
 
         for (var i=0; i < subsetCopsCount; i++) {
-            var tmp = coefficients[i].Mul(parts[i]);
-            var tmp2 = numOut.Add(tmp);
-            numOut = tmp2.Mod(baseCoefficient);
             ret = ret.Add(coefficients[i].Mul(parts[i])).Mod(baseCoefficient);
         }
 

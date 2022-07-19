@@ -7,10 +7,8 @@
 /// </summary>
 public class Bucket: ChineseBase
 {
-    
     private readonly int _length;
     private readonly int _bundleSize;
-    private readonly int _paddedLength;
     private readonly int _sliceSize;
     private readonly int _minBundles;
     private readonly int _hunkSize;
@@ -22,12 +20,12 @@ public class Bucket: ChineseBase
         _bundleSize = bundleSize;
         var bundleShorts = _bundleSize / SizeOfShort;
         Assert(bundleShorts * SizeOfShort == bundleSize, ()=>"bundle size is odd"); // throw if odd bundle_size
-        _paddedLength = div_round_up(_length, _bundleSize) * _bundleSize;
+        var paddedLength = div_round_up(_length, _bundleSize) * _bundleSize;
         _sliceSize = SizeOfShort;
-        _minBundles = _paddedLength / _bundleSize;
+        _minBundles = paddedLength / _bundleSize;
         _hunkSize = _minBundles * _sliceSize;
-        _numHunks = 0 | (_paddedLength / _hunkSize);
-        Assert(_numHunks == _paddedLength / _hunkSize, ()=>"hunk size does not match hunk count");
+        _numHunks = 0 | (paddedLength / _hunkSize);
+        Assert(_numHunks == paddedLength / _hunkSize, ()=>"hunk size does not match hunk count");
 
         _bundles = new ByteMap();
     }
@@ -48,13 +46,13 @@ public class Bucket: ChineseBase
     public bool IsComplete() {
         // do the cops multiply to more than the min_bundles value
         var prod = new Big(1);
-        foreach (var bundleNum in _bundles.Keys) {
+        foreach (var bundleNum in _bundles.BundleNumbers) {
             prod = prod.Mul(CoPrimes.CoPrime16(bundleNum));
         }
         
         var t1 = Big.Pow(65536, (uint)_minBundles);
         var t2 = prod.GT(t1);
-        return t2; //prod.gt(mpz(65536).pow(mpz(this.num_hunks)));
+        return t2;
     }
     
     /// <summary>
@@ -62,65 +60,56 @@ public class Bucket: ChineseBase
     /// </summary>
     /// <returns></returns>
     public byte[] RecoverData() {
-        var hunks = new List<byte[]>();
+        var hunks = new byte[_length];
+        var pos = 0;
         var subsetCops = new List<Big>();
-        foreach (var bundleNum in _bundles.Keys) {
+        foreach (var bundleNum in _bundles.BundleNumbers) {
             subsetCops.Add(CoPrimes.CoPrime16(bundleNum));
         }
+        
+        var bAndC = CoPrimes.CalculateCoefficients(subsetCops); // pre-compute as much as we can
+        var copsCount = subsetCops.Count;
+        
         for (var hunkNum = 0; hunkNum < _numHunks; hunkNum++) {
             var parts = new List<Big>();
-            foreach (var bundleNum in _bundles.Keys) {
-                parts.Add(new Big(256 * _bundles[bundleNum][hunkNum * _sliceSize] +
-                               _bundles[bundleNum][hunkNum * _sliceSize + 1]));
+            foreach (var bytes in _bundles.ByteSets) {
+                // recover the 16-bit terms
+                parts.Add(new Big((bytes[hunkNum * _sliceSize] << 8) + bytes[hunkNum * _sliceSize + 1]));
             }
             
-            var bigIntHunk = CoPrimes.Combine(parts, subsetCops);
+            var bigIntHunk = CoPrimes.Combine(parts, bAndC, copsCount);
+            
             var hunk = bigIntHunk.ToBuffer();
             if (hunk.Length < _hunkSize) {
                 var padding = new byte[_hunkSize - hunk.Length];
                 
-                hunks.Add(padding);
-                hunks.Add(hunk);
+                pos = Add(hunks, pos, padding);
+                pos = Add(hunks, pos, hunk);
                 Assert(hunk.Length + padding.Length == _hunkSize, ()=>"Unexpected hunk size after padding");
             } else if (hunk.Length > _hunkSize) {
-                bigIntHunk = CoPrimes.Combine(RemoveLast(parts), RemoveLast(subsetCops));
+                bigIntHunk = CoPrimes.Combine(parts, subsetCops, subsetCops.Count - 1); // combine, ignoring last element
                 hunk = bigIntHunk.ToBuffer();
 
                 Assert(hunk.Length == _hunkSize, ()=>"Unexpected hunk size after combining");
-                hunks.Add(hunk);
+                pos = Add(hunks, pos, hunk);
             } else {
-                hunks.Add(hunk);
+                pos = Add(hunks, pos, hunk);
             }
         }
         
-        var fullLength = WholeSize(hunks);
-        Assert(fullLength == _paddedLength, ()=>"Recovered length did not match declared length");
-        return RepackToArray(hunks, _length);
+        return hunks;
     }
 
-    private static List<Big> RemoveLast(IReadOnlyList<Big> src)
+    private static int Add(byte[] dst, int offset, byte[] src)
     {
-        var dst = new List<Big>();
-        for (var i = 0; i < src.Count - 1; i++)
+        var limit = dst.Length - offset;
+        if (limit > src.Length) limit = src.Length;
+        
+        for (var i = 0; i < limit; i++)
         {
-            dst.Add(src[i]);
+            dst[i + offset] = src[i];
         }
-        return dst;
+        
+        return offset + limit;
     }
-
-    private byte[] RepackToArray(List<byte[]> hunks, int size)
-    {
-        var output = new byte[size]; // this is the size it should be
-        var position = 0;
-
-        foreach (var byteValue in hunks.SelectMany(hunk => hunk))
-        {
-            output[position++] = byteValue;
-            if (position >= size) break; // sometimes we will go over due to bundle size
-        }
-
-        return output;
-    }
-
-    private static int WholeSize(IEnumerable<byte[]> hunks) => hunks.Sum(hunk => hunk.Length);
 }

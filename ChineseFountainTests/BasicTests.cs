@@ -1,4 +1,5 @@
-﻿using ChineseFountain.core;
+﻿using System.Diagnostics;
+using ChineseFountain.core;
 using NUnit.Framework;
 
 namespace ChineseFountainTests;
@@ -124,7 +125,7 @@ public class BasicTests
     [Test, Explicit("should work, but it's slow")]
     public void recovering_data_large()
     {
-        // Only one mb, but it fails
+        // Only one mb, but the growth of the Recover function is rapid
         Big.ResetSize();
         byte[] original = MakeData(1024*1024);
         var bundleSize = original.Length / 100;
@@ -133,19 +134,26 @@ public class BasicTests
         var source = new Fountain(original, bundleSize);
         var target = new Bucket(original.Length, bundleSize);
 
+        var sw = new Stopwatch();
+        
+        sw.Start();
         int i;
         for (i = 0; i < 900; i++)
         {
             if (target.IsComplete()) break;
             target.Push(i, source.Generate(i));
         }
+        sw.Stop();
         
         var recSize = bundleSize*(i-1);
-        Console.WriteLine($"Completed after {i} bundles: {recSize} bytes to transmit {original.Length}");
+        Console.WriteLine($"Completed after {i} bundles in {sw.Elapsed}: {recSize} bytes to transmit {original.Length}");
         
         Assert.That(target.IsComplete(), Is.True, "Target did not complete");
         
+        sw.Restart();
         var final = target.RecoverData(); // n^2 ?
+        sw.Stop();
+        Console.WriteLine($"Data recovered in {sw.Elapsed}");
         
         Assert.That(final.Length, Is.EqualTo(original.Length), "Data length is incorrect");
 

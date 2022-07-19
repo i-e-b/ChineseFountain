@@ -159,7 +159,7 @@ public class SendAndReceiveTests
         }
     }
 
-    private static void Shuffle<T>(List<T> list)
+    private static void Shuffle<T>(IList<T> list)
     {
         var rnd = new Random();
         for (var dst = list.Count - 1; dst > 0; dst--)

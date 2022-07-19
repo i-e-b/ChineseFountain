@@ -1,6 +1,3 @@
-using System.Collections;
-using System.Globalization;
-
 namespace ChineseFountain.core
 {
     public class BigInteger
@@ -13,14 +10,6 @@ namespace ChineseFountain.core
 
         private BigInteger() { _magnitude = Array.Empty<int>(); }
         
-        private BigInteger(BigInteger other) {
-            _sign = other._sign;
-            _nBitLength = other._nBitLength;
-            
-            _magnitude = new int[other._magnitude.Length];
-            for (int i = 0; i < other._magnitude.Length; i++) { _magnitude[i] = other._magnitude[i]; }
-        }
-
         private BigInteger(int sign, int[] mag)
         {
             _sign = sign;
@@ -50,76 +39,6 @@ namespace ChineseFountain.core
                 _magnitude = mag;
                 _sign = 0;
             }
-        }
-
-        private BigInteger(string sval) //throws FormatException
-            : this(sval, 10) { }
-
-        private BigInteger(string sval, int rdx) //throws FormatException
-        {
-            if (sval.Length == 0)
-            {
-                throw new FormatException("Zero length BigInteger");
-            }
-
-            NumberStyles style;
-            switch (rdx)
-            {
-                case 10:
-                    style = NumberStyles.Integer;
-                    break;
-                case 16:
-                    style = NumberStyles.AllowHexSpecifier;
-                    break;
-                default:
-                    throw new FormatException("Only base 10 or 16 allowed");
-            }
-
-
-            var index = 0;
-            _sign = 1;
-
-            if (sval[0] == '-')
-            {
-                if (sval.Length == 1)
-                {
-                    throw new FormatException("Zero length BigInteger");
-                }
-
-                _sign = -1;
-                index = 1;
-            }
-
-            // strip leading zeros from the string value
-            while (index < sval.Length && int.Parse(sval[index].ToString(), style) == 0)
-            {
-                index++;
-            }
-
-            if (index >= sval.Length)
-            {
-                // zero value - we're done
-                _sign = 0;
-                _magnitude = Array.Empty<int>();
-                return;
-            }
-
-            //////
-            // could we work out the max number of ints required to store
-            // sval.length digits in the given base, then allocate that
-            // storage in one hit?, then generate the magnitude in one hit too?
-            //////
-
-            var b = Zero;
-            var r = ValueOf(rdx);
-            while (index < sval.Length)
-            {
-                // (optimise this by taking chunks of digits instead?)
-                b = b.Multiply(r).Add(ValueOf(int.Parse(sval[index].ToString(), style)));
-                index++;
-            }
-
-            _magnitude = b._magnitude;
         }
 
         private BigInteger(byte[] bVal) //throws FormatException
@@ -422,8 +341,8 @@ namespace ChineseFountain.core
 
                 if (shift > 1)
                 {
-                    c = shiftLeft(y, shift - 1);
-                    count = shiftLeft(_one._magnitude, shift - 1);
+                    c = ShiftLeft(y, shift - 1);
+                    count = ShiftLeft(_one._magnitude, shift - 1);
                     if (shift % 32 == 0)
                     {
                         // Special case where the shift is the size of an int.
@@ -475,13 +394,13 @@ namespace ChineseFountain.core
 
                         if (shift == 0)
                         {
-                            c = shiftRightOne(cStart, c);
-                            iCount = shiftRightOne(iCountStart, iCount);
+                            c = ShiftRightOne(cStart, c);
+                            iCount = ShiftRightOne(iCountStart, iCount);
                         }
                         else
                         {
-                            c = shiftRight(cStart, c, shift);
-                            iCount = shiftRight(iCountStart, iCount, shift);
+                            c = ShiftRight(cStart, c, shift);
+                            iCount = ShiftRight(iCountStart, iCount, shift);
                         }
 
                         if (c[cStart] == 0)
@@ -681,7 +600,7 @@ namespace ChineseFountain.core
         /**
          * return x with x = y * z - x is assumed to have enough space.
          */
-        private int[] multiply(int[] x, int[] y, int[] z)
+        private static int[] Multiply(int[] x, int[] y, int[] z)
         {
             for (var i = z.Length - 1; i >= 0; i--)
             {
@@ -710,7 +629,7 @@ namespace ChineseFountain.core
 
             var res = new int[_magnitude.Length + val._magnitude.Length];
 
-            return new BigInteger(_sign * val._sign, multiply(res, _magnitude, val._magnitude));
+            return new BigInteger(_sign * val._sign, Multiply(res, _magnitude, val._magnitude));
         }
 
         private BigInteger Negate()
@@ -766,7 +685,7 @@ namespace ChineseFountain.core
 
                 if (shift > 1)
                 {
-                    c = shiftLeft(y, shift - 1);
+                    c = ShiftLeft(y, shift - 1);
                 }
                 else
                 {
@@ -801,7 +720,7 @@ namespace ChineseFountain.core
 
                         shift = BitLength(cStart, c) - BitLength(xStart, x);
 
-                        c = shift == 0 ? shiftRightOne(cStart, c) : shiftRight(cStart, c, shift);
+                        c = shift == 0 ? ShiftRightOne(cStart, c) : ShiftRight(cStart, c, shift);
 
                         if (c[cStart] == 0)
                         {
@@ -849,7 +768,7 @@ namespace ChineseFountain.core
         /**
          * do a left shift - this returns a new array.
          */
-        private int[] shiftLeft(int[] mag, int n)
+        private static int[] ShiftLeft(int[] mag, int n)
         {
             var nInts = (int)((uint)n >> 5);
             var nBits = n & 0x1f;
@@ -902,13 +821,13 @@ namespace ChineseFountain.core
             if (n == 0) return this;
             if (n < 0) return ShiftRight(-n);
 
-            return new BigInteger(_sign, shiftLeft(_magnitude, n));
+            return new BigInteger(_sign, ShiftLeft(_magnitude, n));
         }
 
         /**
          * do a right shift - this does it in place.
          */
-        private int[] shiftRight(int start, int[] mag, int n)
+        private static int[] ShiftRight(int start, int[] mag, int n)
         {
             var nInts = (int)((uint)n >> 5) + start;
             var nBits = n & 0x1f;
@@ -950,7 +869,7 @@ namespace ChineseFountain.core
         /**
          * do a right shift by one - this does it in place.
          */
-        private int[] shiftRightOne(int start, int[] mag)
+        private static int[] ShiftRightOne(int start, int[] mag)
         {
             var magLen = mag.Length;
 
@@ -984,7 +903,7 @@ namespace ChineseFountain.core
 
             Array.Copy(_magnitude, 0, res, 0, res.Length);
 
-            return new BigInteger(_sign, shiftRight(0, res, n));
+            return new BigInteger(_sign, ShiftRight(0, res, n));
         }
 
         /**
@@ -999,18 +918,14 @@ namespace ChineseFountain.core
 
             do
             {
-                m = (x[iT] & IntMask) - (y[iV--] & IntMask) + borrow;
+                m = (x[iT] & IntMask) - (y[iV] & IntMask) + borrow;
 
-                x[iT--] = (int)m;
+                x[iT] = (int)m;
+                
+                iV--;
+                iT--;
 
-                if (m < 0)
-                {
-                    borrow = -1;
-                }
-                else
-                {
-                    borrow = 0;
-                }
+                borrow = m < 0 ? -1 : 0;
             } while (iV >= yStart);
 
             while (iT >= xStart)
@@ -1114,81 +1029,6 @@ namespace ChineseFountain.core
             }
             
             return accum.ToArray();
-        }
-
-        public override string ToString()
-        {
-            return ToString(10);
-        }
-
-        private string ToString(int rdx)
-        {
-            string format;
-            switch (rdx)
-            {
-                case 10:
-                    format = "d";
-                    break;
-                case 16:
-                    format = "x";
-                    break;
-                default:
-                    throw new FormatException("Only base 10 or 16 are allowed");
-            }
-
-            if (_sign == 0)
-            {
-                return "0";
-            }
-
-            var s = "";
-
-            if (rdx == 16)
-            {
-                for (var i = 0; i < _magnitude.Length; i++)
-                {
-                    var h = "0000000" + _magnitude[i].ToString("x");
-                    h = h.Substring(h.Length - 8);
-                    s += h;
-                }
-            }
-            else
-            {
-                // This is algorithm 1a from chapter 4.4 in Semi-numerical Algorithms, slow but it works
-                var stack = new Stack();
-                var bs = new BigInteger(rdx.ToString());
-                // The sign is handled separately.
-                // Notice however that for this to work, radix 16 _MUST_ be a special case,
-                // unless we want to enter a recursion well.
-                var u = new BigInteger(Abs());
-
-                // For speed, maye these test should look directly a u.magnitude.Length?
-                while (!u.Equals(Zero))
-                {
-                    var b = u.Mod(bs);
-                    if (b.Equals(Zero))
-                        stack.Push("0");
-                    else
-                    {
-                        // see how to interact with different bases
-                        stack.Push(b._magnitude[0].ToString(format));
-                    }
-                    u = u.Divide(bs);
-                }
-                // Then pop the stack
-                while (stack.Count != 0)
-                    s = s + stack.Pop();
-            }
-            // Strip leading zeros.
-            while (s.Length > 1 && s[0] == '0')
-                s = s.Substring(1);
-
-            if (s.Length == 0)
-                s = "0";
-            else if (_sign == -1)
-                s = "-" + s;
-
-            return s;
         }
 
         public static readonly BigInteger Zero = new(0, Array.Empty<byte>());

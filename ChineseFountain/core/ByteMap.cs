@@ -7,16 +7,20 @@ public class ByteMap
 {
     // TODO: replace with position/value pairs
     
-    private readonly Dictionary<int, byte[]> _data = new();
+    private readonly List<NumberedBytes> _data = new();
 
     public byte[] this[int bundleNum]
     {
-        get => _data[bundleNum];
-        set {
-            if (_data.ContainsKey(bundleNum)) { _data[bundleNum] = value; }
-            else                              { _data.Add(bundleNum, value); }
-        }
+        set => _data.Add(new NumberedBytes{Index=bundleNum, Bytes=value});
     }
 
-    public IEnumerable<int> Keys => _data.Keys.ToArray();
+    public IEnumerable<int> BundleNumbers => _data.Select(d=>d.Index);
+
+    public IEnumerable<byte[]> ByteSets => _data.Select(d=>d.Bytes);
+}
+
+internal class NumberedBytes
+{
+    public byte[] Bytes = Array.Empty<byte>();
+    public int Index = 0;
 }

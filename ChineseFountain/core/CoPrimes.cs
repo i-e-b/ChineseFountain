@@ -37,7 +37,7 @@ public static class CoPrimes
     /// This seems to be the main bottleneck of the data recovery.
     /// Most time is spent in `Mod`
     /// </remarks>
-    private static BaseAndCoefficients CalculateCoefficients(List<Big> subsetCops) {
+    public static BaseAndCoefficients CalculateCoefficients(List<Big> subsetCops) {
         var baseCoefficient = _1;
         for (var i = 0; i < subsetCops.Count; i++) {
             baseCoefficient = baseCoefficient.Mul(subsetCops[i]);
@@ -70,17 +70,41 @@ public static class CoPrimes
         return new BaseAndCoefficients (preMultCoefficients, baseCoefficient);
     }
     
-    // Returns the smallest number which has a given set of remainders when divided by the cops.
-    public static Big Combine(List<Big> parts, List<Big> subsetCops) {
+    /// <summary>
+    /// Returns the smallest number which has a given set of remainders when divided by the cops.
+    /// </summary>
+    /// <remarks>
+    /// This seems to be the main bottleneck of the data recovery.
+    /// Most time is spent in `Mod`
+    /// </remarks>
+    public static Big Combine(List<Big> parts, List<Big> subsetCops, int limit) {
         var ob = CalculateCoefficients(subsetCops);
         var coefficients = ob.Coefficients;
         var baseCoefficient = ob.Base;
 
-        if (parts.Count != subsetCops.Count) { throw new Exception("incorrect number of parts"); }
+        if (parts.Count < limit || subsetCops.Count < limit) { throw new Exception("incorrect number of parts"); }
         var ret = new Big(0);
         var numOut = new Big(0);
 
-        for (var i=0; i < subsetCops.Count; i++) {
+        for (var i=0; i < limit; i++) {
+            var tmp = coefficients[i].Mul(parts[i]);
+            var tmp2 = numOut.Add(tmp);
+            numOut = tmp2.Mod(baseCoefficient);
+            ret = ret.Add(coefficients[i].Mul(parts[i])).Mod(baseCoefficient);
+        }
+
+        return ret;
+    }
+    
+    public static Big Combine(List<Big> parts, BaseAndCoefficients subsetCopsBc, int subsetCopsCount) {
+        var coefficients = subsetCopsBc.Coefficients;
+        var baseCoefficient = subsetCopsBc.Base;
+
+        if (parts.Count != subsetCopsCount) { throw new Exception("incorrect number of parts"); }
+        var ret = new Big(0);
+        var numOut = new Big(0);
+
+        for (var i=0; i < subsetCopsCount; i++) {
             var tmp = coefficients[i].Mul(parts[i]);
             var tmp2 = numOut.Add(tmp);
             numOut = tmp2.Mod(baseCoefficient);

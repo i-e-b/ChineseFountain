@@ -57,7 +57,8 @@ public class Fountain: ChineseBase
         for (var i = 0; i < _bundleShorts; i++) {
             var bigIntHunk = _bigIntHunks[i];
             
-            var part = bigIntHunk.Mod(CoPrimes.CoPrime16(bundleNum));
+            var cop = CoPrimes.CoPrime16(bundleNum); // heavily cached
+            var part = bigIntHunk.Mod(cop); // expensive!
             
             var partBuf = part.ToBuffer();
             
